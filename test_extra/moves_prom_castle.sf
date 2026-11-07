@@ -1,0 +1,5 @@
+position fen r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1 moves g1h1 b2b1q
+go perft 2
+! go perft 4
+! prom castle perft 4 reference 422333 moves
+d

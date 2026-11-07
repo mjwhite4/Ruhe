@@ -1,0 +1,19 @@
+# fpm.toml
+
+name = "ruhe"
+version = "2026.10.26"
+author = "Michael White"
+license = "GPL-3.0-or-later"
+
+[library]
+source-dir = "src"
+
+[fortran]
+implicit-typing = false
+implicit-external = false
+
+[[executable]]
+name = "ruhe"
+source-dir = "app"
+main = "ruhe.f90"
+

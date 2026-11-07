@@ -1,0 +1,8 @@
+position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1
+go perft 2
+# kiwipete perft 2 reference 2,039 nodes
+go perft 3
+# kiwipete perft 3 reference 97,862 nodes
+go perft 4
+# kiwipete perft 4 reference 4,085,601 nodes
+d
