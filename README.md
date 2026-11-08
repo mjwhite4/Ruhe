@@ -1,6 +1,6 @@
-# ruhe — A UCI chess engine in Fortran
+# Ruhe — A UCI chess engine in Fortran
 
-**ruhe** is a hobby chess engine written in modern Fortran, using Fortran 2018
+**Ruhe** is a hobby chess engine written in modern Fortran, using Fortran 2018
 for the debug build. Created by Michael White, the project began in February
 2026 under the name **Unsound**.
 
