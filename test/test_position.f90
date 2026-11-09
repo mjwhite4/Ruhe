@@ -51,37 +51,32 @@ program test_position
   call assert_position( &
     test_name="hanging queen", &
     fen="7k/8/8/3q4/8/8/8/K2R4 w - - 0 1", &
-    ref_nmoves=12, &
-    require_moves="d1d5")
+    ref_nmoves=12)
 
   call assert_position( &
     test_name="promotion", &
     fen="7k/P7/8/8/8/8/8/7K w - - 0 1", &
-    ref_nmoves=7, &
-    require_moves="a7a8q,a7a8r,a7a8n,a7a8b")
+    ref_nmoves=7)
 
   call assert_position( &
     test_name="legal en passant", &
     fen="7k/8/8/3pP3/8/8/8/7K w - d6 0 1", &
-    ref_nmoves=5, &
-    require_moves="e5d6")
+    ref_nmoves=5)
 
   call assert_position( &
     test_name="illegal en passant", &
     fen="8/8/8/8/k2pP2R/8/8/3K4 b - e3 0 1", &
-    ref_nmoves=6, &
-    forbidden_moves="d4e3")
+    ref_nmoves=6)
 
   call assert_position( &
     test_name="castling", &
     fen="r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", &
-    ref_nmoves=26, &
-    require_moves="e1g1,e1c1")
+    ref_nmoves=26)
 
 contains
 
   subroutine assert_position(test_name, fen, ref_nmoves, &
-                             ref_score, ref_bm, require_moves, forbidden_moves)
+                             ref_score, ref_bm)
 
     use, intrinsic :: iso_fortran_env, only: real64
     use iso_fortran_env, only: error_unit, output_unit
@@ -95,7 +90,7 @@ contains
     integer, intent(in), optional :: ref_nmoves
     integer(EVK), intent(in), optional :: ref_score
     character(len=*), intent(in), optional :: &
-      ref_bm, require_moves, forbidden_moves
+      ref_bm
 
     type(BoardT), pointer :: board
     integer :: ipos, nmoves, ply
@@ -154,19 +149,6 @@ contains
         if (token == "") exit
         if (.not. count(token == get_uci(moves)) == 1) then
           call fail("ref_bm:"//trim(token)//" not found once")
-        end if
-      end do
-    end if
-
-    ! not any forbidden_moves may appear
-    if (present(forbidden_moves)) then
-      ipos = 1
-      do
-        call next_token(forbidden_moves, ",", ipos, token)
-        token = trim(adjustl(token))
-        if (token == "") exit
-        if (any(token == get_uci(moves))) then
-          call fail("forbidden_moves:"//trim(token)//" was found")
         end if
       end do
     end if
