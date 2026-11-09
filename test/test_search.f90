@@ -175,6 +175,18 @@ contains
       elseif (nmoves /= board%stack%ixn(p) - board%stack%ix1(p) + 1) then
         call fail("nmoves/=ixn-ix1+1 not restored after alphabeta")
       end if
+
+      ! ensure null move for terminal position
+      if (nmoves == 0) then
+        if (alphabeta_out%move /= 0_MVK) then
+          call fail("alphabeta: expected null move for terminal position")
+        end if
+      else if (.not. any(moves == alphabeta_out%move)) then
+        call fail("alphabeta: returned move is not legal")
+      end if
+
+      ! prove that each of moves(i) exists once within move_list(ix1:ixn)
+      ! (and with above nmoves == ixn(p) - ix1(p) + 1, the converse)
       do i = 1, nmoves
         if (.not. count(moves(i) == board%stack%move_list( &
                         board%stack%ix1(p):board%stack%ixn(p))) == 1) then
@@ -202,6 +214,9 @@ contains
       elseif (nmoves /= board%stack%ixn(p) - board%stack%ix1(p) + 1) then
         call fail("nmoves/=ixn-ix1+1 not restored after negamax")
       end if
+
+      ! prove that each of moves(i) exists once within move_list(ix1:ixn)
+      ! (and with above nmoves == ixn(p) - ix1(p) + 1, the converse)
       do i = 1, nmoves
         if (.not. count(moves(i) == board%stack%move_list( &
                         board%stack%ix1(p):board%stack%ixn(p))) == 1) then
@@ -222,6 +237,15 @@ contains
             " ref_score:", ref_score
           call fail(trim(message_txt))
         end if
+      end if
+
+      ! ensure null move for terminal position
+      if (nmoves == 0) then
+        if (negamax_out%move /= 0_MVK) then
+          call fail("negamax: expected null move for terminal position")
+        end if
+      else if (.not. any(moves == negamax_out%move)) then
+        call fail("negamax: returned move is not legal")
       end if
 
       ! if searched move and not one of the ref_bm are matched, fail
