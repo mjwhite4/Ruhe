@@ -83,41 +83,32 @@ contains
 
     nodes = 0_int64
 
+#ifdef DEBUG
+    fen_before = get_fen(board)
+#endif
+
     !! tally sub-tree move counts
     p = board%stack%current_ply
     do i = board%stack%ix1(p), board%stack%ixn(p)
       mv = board%stack%move_list(i)
 
 #ifdef DEBUG
-      ! print *, "fen=", get_fen(board)
-      ! call print_board_stamp(board)
-
-      ! print *, "L67: considering move, mv=", get_uci(mv)
-
-      fen_before = get_fen(board)
       if (.not. board%verify_hash()) then
-        print '(a)', trim(fen_before)
-        error stop "L79: verify_hash fail"
+        print '(a, a, a, a)', "position fen ", trim(fen_before), &
+          ' moves ', get_uci(mv)
+        error stop "L106: verify_hash fail"
       end if
 #endif
 
       ! if move mv would place king in check
       call board%is_into_check(mv, tf)
       if (tf) then
-        PRINT *, "L65: skipping is_into_check: mv= ", get_uci(mv)
+        PRINT *, "L113: skipping is_into_check: mv= ", get_uci(mv)
         cycle ! skip illegal move
       end if
 
       ! move on the board
       call make_move(board, mv)
-
-#ifdef DEBUG
-      if (.not. board%verify_hash()) then
-        print '(a, a, a, a)', "position fen ", trim(fen_before), &
-          ' moves ', get_uci(mv)
-        error stop "L98: verify_hash fail"
-      end if
-#endif
 
       ! recurse into the tree for valid legal move
       call perft(board, depth - 1, subtree_nodes, breakdown_opt=.false.)
@@ -132,6 +123,11 @@ contains
         write (error_unit, "(a,a)") "fen_before=", trim(fen_before)
         write (error_unit, "(a,a)") "fen_after =", trim(fen_after)
         error stop "perft: unmake_move failed to restore original state"
+      end if
+
+      if (.not. board%verify_hash()) then
+        print '(a)', trim(fen_before)
+        error stop "L137: verify_hash fail"
       end if
 #endif
 
