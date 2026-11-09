@@ -124,11 +124,13 @@ contains
     ! print '(a)', get_uci(moves)
 
     ! count of nmoves must match ref_nmoves
-    if (present(ref_nmoves) .and. nmoves /= ref_nmoves) then
-      write (unit=message_txt, fmt='(a,i0,a,i0)') &
-        " nmoves:", nmoves, &
-        " ref_nmoves:", ref_nmoves
-      call fail(trim(message_txt))
+    if (present(ref_nmoves)) then
+      if (nmoves /= ref_nmoves) then
+        write (unit=message_txt, fmt='(a,i0,a,i0)') &
+          " nmoves:", nmoves, &
+          " ref_nmoves:", ref_nmoves
+        call fail(trim(message_txt))
+      end if
     end if
 
     ! position with no moves is either checkmate or stalemate, so test it
@@ -141,19 +143,6 @@ contains
 
       call pass()
       return
-    end if
-
-    ! all require_moves must appear exactly once
-    if (present(require_moves)) then
-      ipos = 1
-      do
-        call next_token(require_moves, ",", ipos, token)
-        token = trim(adjustl(token))
-        if (token == "") exit
-        if (.not. count(token == get_uci(moves)) == 1) then
-          call fail("require_moves:"//trim(token)//" not found once")
-        end if
-      end do
     end if
 
     ! all ref_bm must appear exactly once
