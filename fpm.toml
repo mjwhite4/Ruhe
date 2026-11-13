@@ -12,6 +12,21 @@ source-dir = "src"
 implicit-typing = false
 implicit-external = false
 
+[preprocess.cpp]
+suffixes = ["F90", "f90"]
+macros = ["DEBUG"]
+
+[features.debug-flags]
+gfortran.flags = "-std=f2018 -Wall -Wextra -Werror -fcheck=all -fall-intrinsics -g -fbacktrace -cpp -DDEBUG"
+
+[features.release-flags]
+gfortran.flags = "-O3 -march=native -ffast-math -funroll-loops -fno-stack-protector -fall-intrinsics"
+
+[profiles]
+debug = ["debug-flags"]
+release = ["release-flags"]
+
+
 [[executable]]
 name = "ruhe"
 source-dir = "app"

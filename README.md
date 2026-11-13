@@ -17,21 +17,27 @@ date-based version.
 
 ## Current capabilities
 
-- Bitboard-based move generation with ray attacks and retained 0x88-derived
+* Bitboard-based move generation with ray attacks and retained 0x88-derived
   board-boundary methods. Many masks are compile-time constants; some ray/vector
   tables are initialized at runtime.
-- Castling, promotions, en passant, checks, checkmate, and stalemate covered by
+
+* Castling, promotions, en passant, checks, checkmate, and stalemate covered by
   position tests and reference perft counts.
-- Alpha-beta negamax with iterative deepening and a separate, unpruned negamax
+
+* Alpha-beta negamax with iterative deepening and a separate, unpruned negamax
   reference for shallow comparisons.
-- Basic material, piece-square, and game-phase evaluation. Debug assertions compare
+
+* Basic material, piece-square, and game-phase evaluation. Debug assertions compare
   incremental evaluation with full recomputation around make/unmake operations.
-- Zobrist hashing with internal consistency checks. Compatibility with Polyglot
+
+* Zobrist hashing with internal consistency checks. Compatibility with Polyglot
   or Stockfish/Fruit hashing conventions is **not established**.
-- UCI handshake, readiness, position setup, depth/node/time limits, ordinary clocks
+
+* UCI handshake, readiness, position setup, depth/node/time limits, ordinary clocks
   and increments, infinite search, stop, and quit. Search reports depth, nodes,
   elapsed time, and a one-move `pv`.
-- Single-threaded search with buffered nonblocking POSIX input through a small C
+
+* Single-threaded search with buffered nonblocking POSIX input through a small C
   interface, allowing readiness and stop commands during search.
 
 Quiescence search, principal variation search, full principal-variation tracking,
@@ -40,48 +46,53 @@ storage module and its unit tests already exist.
 
 ## Requirements
 
-- GNU Fortran (`gfortran`) and a C compiler for `src/uci_input.c`.
-- Fortran Package Manager (`fpm`) with runner support.
-- Bash 3.2 or later for `fpmx.sh`.
-- A POSIX environment; macOS is the development/test platform. Linux and WSL are
+* GNU Fortran (`gfortran`) and a C compiler for `src/uci_input.c`.
+
+* Fortran Package Manager (`fpm`) with runner support.
+
+* Bash 3.2 or later for `fpmx.sh`.
+
+* A POSIX environment; macOS is the development/test platform. Linux and WSL are
   intended targets, but the reported milestone results do not establish testing
   on those platforms. Native Windows input support is not supplied.
-- Python 3 and `python-chess` for the separate UCI integration tests.
 
-The wrapper contains compiler/CPU-specific flags. Review them for a new host:
-release currently includes `-mcpu=native`, which may need adjustment on a different
+* Python 3 and `python-chess` for the separate UCI integration tests.
+
+Compiler and CPU-specific flags are configured in `fpm.toml`. Review them for a new host:
+release currently includes `-march=native`, which may need adjustment on a different
 architecture. Debug includes strict warnings, runtime checks, and `-DDEBUG`.
 
 ## Build and run
 
 Clone the repository using an account authorized to access it:
 
-```bash
+```
 git clone https://github.com/mjwhite4/Ruhe.git
 cd Ruhe
 
 ./fpmx.sh build release
 ./fpmx.sh build debug
+
 ```
 
-The wrapper copies the selected executable into the project root:
+Using `fpm`'s runner mechanism under the hood, the wrapper automatically builds and copies the executable directly into the project root:
 
-| Profile | Executable |
-| --- | --- |
-| Release | `./ruhe` |
-| Debug | `./ruhe-debug` |
+| Profile | Executable | 
+| ----- | ----- | 
+| Release | `./ruhe` | 
+| Debug | `./ruhe-debug` | 
 
-Intermediate files remain under fpm's `build/` directories. The wrapper does not
-install into `~/.local/bin`; its `install` action is an alias for `build`.
+Intermediate files remain under fpm's hashed `build/` directories.
 
 Run `./ruhe` interactively, or configure a UCI controller to launch its absolute
 path. For a manual protocol check, enter commands one at a time:
 
-```text
+```
 uci
 isready
 position startpos moves e2e4 e7e5
 go depth 3
+
 ```
 
 Wait for `bestmove`, then enter `quit`. For an infinite search, use `go infinite`
@@ -92,21 +103,23 @@ and subsequently `stop`. Additional human-facing commands include `help` and
 
 Run the fpm suite in both profiles:
 
-```bash
+```
 ./fpmx.sh test debug
 ./fpmx.sh test release
+
 ```
 
 Focused examples:
 
-```bash
-./fpmx.sh test test_perft release
-./fpmx.sh test test_go_parser debug
-./fpmx.sh test test_clock debug
-./fpmx.sh test test_search debug
+```
+./fpmx.sh test release test_perft
+./fpmx.sh test debug test_go_parser
+./fpmx.sh test debug test_clock
+./fpmx.sh test debug test_search
+
 ```
 
-A successful wrapper `test` run also builds/copies the application for that profile.
+A successful wrapper `test` run executes the specified test suite via `fortran-fpm`.
 
 The suite covers board primitives, attacks, moves, FEN, state, move-stack behavior,
 evaluation, table storage, command parsing, and clock arithmetic. Ten perft cases
@@ -115,12 +128,13 @@ with reference negamax at depths 1–3 and check root restoration.
 
 Run process-level tests separately; `fpm test` does not invoke this Python suite:
 
-```bash
+```
 python3 -m venv .venv-uci
 .venv-uci/bin/python -m pip install python-chess
 
 .venv-uci/bin/python test_extra/test_uci_integration.py ./ruhe-debug
 .venv-uci/bin/python test_extra/test_uci_integration.py ./ruhe
+
 ```
 
 The integration suite validates best-move legality independently with
@@ -134,16 +148,16 @@ arithmetic is tested internally; process timing checks use scheduling slack.
 
 ## Project structure
 
-| Path | Purpose |
-| --- | --- |
-| `app/` | Application entry point. |
-| `src/` | Fortran modules/submodules and the C input layer. |
-| `test/` | fpm test programs, shared helpers, and reference inputs. |
-| `test_extra/test_uci_integration.py` | Live UCI process tests. |
-| `docs/dev-log-0.1.md` | Milestone history, fixes, and verification limits. |
-| `docs/adr/` | Architecture decision records. |
-| `fpmx.sh` | Profile flags, testing, and root-executable copying. |
-| `build/` | Generated fpm intermediates; excluded from Git. |
+| Path | Purpose | 
+| ----- | ----- | 
+| `app/` | Application entry point. | 
+| `src/` | Fortran modules/submodules and the C input layer. | 
+| `test/` | fpm test programs, shared helpers, and reference inputs. | 
+| `test_extra/test_uci_integration.py` | Live UCI process tests. | 
+| `docs/dev-log-0.1.md` | Milestone history, fixes, and verification limits. | 
+| `docs/adr/` | Architecture decision records. | 
+| `fpmx.sh` | Profile flags, testing, and root-executable copying. | 
+| `build/` | Generated fpm intermediates; excluded from Git. | 
 
 ## Development
 

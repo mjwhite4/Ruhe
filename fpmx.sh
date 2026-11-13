@@ -1,118 +1,80 @@
 #!/usr/bin/env bash
-# Run fpm with ruhe's profile flags and publish only to the project root.
-# Place this script beside fpm.toml. Requires Bash 3.2 or later.
+# Run fpm with profile flags and publish binaries directly to the project root.
 # Usage:
-#   ./fpmx.sh build [ruhe] release
-#   ./fpmx.sh install debug
-#   ./fpmx.sh test [test_name ...] release
-#   ./fpmx.sh run debug -- [engine arguments ...]
+#   ./fpmx.sh build debug
+#   ./fpmx.sh build release
+#   ./fpmx.sh test [debug|release] [test_name ...]
+#   ./fpmx.sh run [debug|release] -- [engine arguments ...]
 #   ./fpmx.sh clean
-# Profile defaults to debug; --profile debug/release is also accepted.
-# test runs fpm tests, then copies the app only if the tests succeed.
-# install is a compatibility alias for build: neither action calls fpm install.
 set -eo pipefail
 
-DEBUG_FLAGS="-std=f2018 -Wall -Wextra -Werror -fcheck=all -fall-intrinsics -g -fbacktrace -cpp -DDEBUG"
-RELEASE_FLAGS="-O3 -mcpu=native -ffast-math -funroll-loops -fno-stack-protector -flto -fall-intrinsics"
-
-fail() { printf '[fpmx] %s\n' "$*" >&2; exit 2; }
-usage() {
-  printf '%s\n' 'Usage: fpmx.sh <build|install|test|run|clean> [targets] [debug|release] [-- engine-args]'
-}
-run_command() {
-  printf '%q ' "$@"
-  printf '\n'
-  "$@"
-}
+FPM="fortran-fpm"
 
 PROJECT_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 cd -- "$PROJECT_ROOT"
-[[ -f fpm.toml ]] || fail 'Place fpmx.sh beside fpm.toml.'
-(($#)) || { usage >&2; exit 2; }
-ACTION=$1
-shift
-case "$ACTION" in
-  -h|--help) usage; exit 0 ;;
-  build|install|test|run|clean) ;;
-  *) fail "Unsupported action: $ACTION" ;;
-esac
+[[ -f fpm.toml ]] || { echo '[fpmx] Place fpmx.sh beside fpm.toml.' >&2; exit 2; }
 
-PROFILE=debug
-PROFILE_SET=false
+ACTION="${1:-build}"
+PROFILE="debug"
 TARGETS=()
 ENGINE_ARGS=()
-VERBOSE=()
-while (($#)); do
-  case "$1" in
-    --profile)
-      (($# >= 2)) || fail '--profile requires debug or release'
-      VALUE=$2
-      shift 2
-      ;;
-    --profile=*) VALUE=${1#*=}; shift ;;
-    debug|release) VALUE=$1; shift ;;
-    --verbose) VERBOSE=(--verbose); shift; continue ;;
-    --)
-      [[ "$ACTION" == run ]] || fail '-- engine arguments are supported only for run'
-      shift
-      ENGINE_ARGS=("$@")
-      break
-      ;;
-    -*) fail "Unsupported option: $1 (installation paths and flags are managed by this wrapper)" ;;
-    *) TARGETS+=("$1"); shift; continue ;;
-  esac
-  case "$VALUE" in debug|release) ;; *) fail "Unsupported profile: $VALUE" ;; esac
-  if [[ "$PROFILE_SET" == true && "$PROFILE" != "$VALUE" ]]; then
-    fail 'Conflicting profiles'
-  fi
-  PROFILE=$VALUE
-  PROFILE_SET=true
-done
 
-case "$ACTION" in
-  build|run)
-    if ((${#TARGETS[@]})); then
-      [[ ${#TARGETS[@]} == 1 && ${TARGETS[0]} == ruhe ]] || fail 'Only the ruhe app target is supported'
-    fi
+# Basic argument parsing
+case "$1" in
+  build|test|run|clean)
+    ACTION="$1"
+    shift
     ;;
-  install|clean)
-    ((${#TARGETS[@]} == 0)) || fail "$ACTION does not accept targets"
+  debug|release)
+    PROFILE="$1"
+    shift
+    ACTION="${1:-build}"
+    [[ $# -gt 0 ]] && shift
+    ;;
+  -h|--help)
+    echo "Usage: ./fpmx.sh [build|test|run|clean] [debug|release] [options/args]"
+    exit 0
     ;;
 esac
 
-if [[ "$ACTION" == clean ]]; then
-  # Never delete local executables if fpm clean fails.
-  run_command fpm clean
-  rm -f -- "$PROJECT_ROOT/ruhe" "$PROJECT_ROOT/ruhe-debug"
-  exit 0
+# Check if next arg is profile when action was specified first
+if [[ "$ACTION" == build || "$ACTION" == test || "$ACTION" == run ]]; then
+  if [[ "${1:-}" == "debug" || "${1:-}" == "release" ]]; then
+    PROFILE="$1"
+    shift
+  fi
 fi
 
+# Define local binary destination
 if [[ "$PROFILE" == debug ]]; then
-  FLAGS=$DEBUG_FLAGS
-  DESTINATION="$PROJECT_ROOT/ruhe-debug"
+  LOCAL_EXECUTABLE="./ruhe-debug"
 else
-  FLAGS=$RELEASE_FLAGS
-  DESTINATION="$PROJECT_ROOT/ruhe"
-fi
-COMMON=(--profile "$PROFILE" --flag "$FLAGS")
-
-if [[ "$ACTION" == test ]]; then
-  # These are fpm's test executables, compiled with the selected flags.
-  run_command fpm test "${COMMON[@]}" "${VERBOSE[@]}" "${TARGETS[@]}"
+  LOCAL_EXECUTABLE="./ruhe"
 fi
 
-# Ask fpm to select/build the exact app, then run cp instead of the app.
-# The suffix after -- is cp's destination. No installation is performed.
-if [[ "$PROFILE" == debug ]]; then
-  LOCAL_EXECUTABLE=./ruhe-debug
-else
-  LOCAL_EXECUTABLE=./ruhe
-fi
-[[ ! -d "$LOCAL_EXECUTABLE" ]] || fail "Destination is a directory: $LOCAL_EXECUTABLE"
-run_command fpm run ruhe "${COMMON[@]}" "${VERBOSE[@]}" --runner cp -- "$LOCAL_EXECUTABLE"
-[[ -f "$LOCAL_EXECUTABLE" && -x "$LOCAL_EXECUTABLE" ]] || fail "No executable produced: $LOCAL_EXECUTABLE"
-printf '[fpmx] Updated %s\n' "$DESTINATION"
-
-if [[ "$ACTION" == run ]]; then
-  exec "$LOCAL_EXECUTABLE" "${ENGINE_ARGS[@]}"
-fi
+case "$ACTION" in
+  clean)
+    echo "[fpmx] Cleaning fpm build and local binaries..."
+    $FPM clean
+    rm -f -- ./ruhe ./ruhe-debug ./ruhe-*
+    exit 0
+    ;;
+  test)
+    echo "[fpmx] Running tests ($PROFILE profile)..."
+    $FPM test --profile "$PROFILE" "$@"
+    ;;
+  build)
+    echo "[fpmx] Building and publishing $LOCAL_EXECUTABLE ($PROFILE profile)..."
+    $FPM run ruhe --profile "$PROFILE" --runner cp -- "$LOCAL_EXECUTABLE"
+    echo "[fpmx] Successfully updated $LOCAL_EXECUTABLE"
+    ;;
+  run)
+    # Ensure it's built/published first, then execute with args
+    $FPM run ruhe --profile "$PROFILE" --runner cp -- "$LOCAL_EXECUTABLE"
+    exec "$LOCAL_EXECUTABLE" "$@"
+    ;;
+  *)
+    echo "Unsupported action: $ACTION" >&2
+    exit 2
+    ;;
+esac

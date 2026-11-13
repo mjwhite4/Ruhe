@@ -23,7 +23,6 @@ module UciM
   use StateM, only: StateT
   use PerftM, only: run_perft
   implicit none
-  private
 
   public :: &
     format_pv_line, &
