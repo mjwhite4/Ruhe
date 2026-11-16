@@ -17,7 +17,7 @@ program test_go_parser
   call begin_test("basic depth")
   call set_control(board, "go depth 5", status)
   call check(status == 0, "depth accepted")
-  call check(board%limits%depth == 5, "depth stored")
+  call check(board%limits%depth_limit == 5, "depth stored")
   call pass()
 
   ! All clock fields, with different values to catch swapped assignments.
@@ -26,11 +26,11 @@ program test_go_parser
            "go wtime 60000 btime 45000 winc 1000 binc 500 movestogo 20", status)
 
   call check(status == 0, "clock command accepted")
-  call check(board%limits%wtime == 60000_int64, "wtime")
-  call check(board%limits%btime == 45000_int64, "btime")
-  call check(board%limits%winc == 1000_int64, "winc")
-  call check(board%limits%binc == 500_int64, "binc")
-  call check(board%limits%movestogo == 20, "movestogo")
+  call check(board%limits%white_time_ms == 60000_int64, "wtime")
+  call check(board%limits%black_time_ms == 45000_int64, "btime")
+  call check(board%limits%white_increment_ms == 1000_int64, "winc")
+  call check(board%limits%black_increment_ms == 500_int64, "binc")
+  call check(board%limits%moves_to_go == 20, "movestogo")
   call pass()
 
   ! Independent limits may appear together.
@@ -38,18 +38,18 @@ program test_go_parser
   call set_control(board, &
                    "go depth 8 nodes 100000 movetime 1500", status)
   call check(status == 0, "combined limits accepted")
-  call check(board%limits%depth == 8, "combined depth")
-  call check(board%limits%nodes == 100000_int64, "combined nodes")
-  call check(board%limits%movetime == 1500_int64, "combined movetime")
+  call check(board%limits%depth_limit == 8, "combined depth")
+  call check(board%limits%node_limit == 100000_int64, "combined nodes")
+  call check(board%limits%movetime_ms == 1500_int64, "combined movetime")
   call pass()
 
   ! No stale limits from the previous command.
   call begin_test("no stale limits from the previous command")
   call set_control(board, "go depth 2", status)
   call check(status == 0, "second command accepted")
-  call check(board%limits%movetime == -1_int64, "movetime reset")
-  call check(board%limits%nodes == huge(0_int64), "nodes reset")
-  call check(board%limits%wtime == -1_int64, "clock reset")
+  call check(board%limits%movetime_ms == -1_int64, "movetime reset")
+  call check(board%limits%node_limit == huge(0_int64), "nodes reset")
+  call check(board%limits%white_time_ms == -1_int64, "clock reset")
 
   call set_control(board, "go infinite", status)
   call check(status == 0, "infinite accepted")

@@ -458,9 +458,9 @@ contains
         if (len_trim(token) == 0) then
           status = 1
         else
-          call to_int(token, bd%limits%binc, status)
+          call to_int(token, bd%limits%black_increment_ms, status)
           if (status == 0) then
-            if (bd%limits%binc < 0) status = 2
+            if (bd%limits%black_increment_ms < 0) status = 2
           end if
         end if
 
@@ -471,9 +471,9 @@ contains
         if (len_trim(token) == 0) then
           status = 3
         else
-          call to_int(token, bd%limits%btime, status)
+          call to_int(token, bd%limits%black_time_ms, status)
           if (status == 0) then
-            if (bd%limits%btime < 1) status = 4
+            if (bd%limits%black_time_ms < 1) status = 4
           end if
         end if
 
@@ -484,9 +484,9 @@ contains
         if (len_trim(token) == 0) then
           status = 5
         else
-          call to_int(token, bd%limits%depth, status)
+          call to_int(token, bd%limits%depth_limit, status)
           if (status == 0) then
-            if (bd%limits%depth < 1) status = 6
+            if (bd%limits%depth_limit < 1) status = 6
           end if
         end if
 
@@ -501,9 +501,9 @@ contains
         if (len_trim(token) == 0) then
           status = 7
         else
-          call to_int(token, bd%limits%nodes, status)
+          call to_int(token, bd%limits%node_limit, status)
           if (status == 0) then
-            if (bd%limits%nodes < 1) status = 8
+            if (bd%limits%node_limit < 1) status = 8
           end if
         end if
 
@@ -518,9 +518,9 @@ contains
         if (len_trim(token) == 0) then
           status = 9
         else
-          call to_int(token, bd%limits%movetime, status)
+          call to_int(token, bd%limits%movetime_ms, status)
           if (status == 0) then
-            if (bd%limits%movetime < 1) status = 10
+            if (bd%limits%movetime_ms < 1) status = 10
           end if
         end if
 
@@ -531,9 +531,9 @@ contains
         if (len_trim(token) == 0) then
           status = 11
         else
-          call to_int(token, bd%limits%movestogo, status)
+          call to_int(token, bd%limits%moves_to_go, status)
           if (status == 0) then
-            if (bd%limits%movestogo < 1) status = 12
+            if (bd%limits%moves_to_go < 1) status = 12
           end if
         end if
 
@@ -544,9 +544,9 @@ contains
         if (len_trim(token) == 0) then
           status = 13
         else
-          call to_int(token, bd%limits%winc, status)
+          call to_int(token, bd%limits%white_increment_ms, status)
           if (status == 0) then
-            if (bd%limits%winc < 0) status = 14
+            if (bd%limits%white_increment_ms < 0) status = 14
           end if
         end if
 
@@ -557,9 +557,9 @@ contains
         if (len_trim(token) == 0) then
           status = 15
         else
-          call to_int(token, bd%limits%wtime, status)
+          call to_int(token, bd%limits%white_time_ms, status)
           if (status /= 0) then
-            if (bd%limits%wtime < 1) status = 16
+            if (bd%limits%white_time_ms < 1) status = 16
           end if
         end if
 

@@ -54,7 +54,7 @@ contains
 
     use, intrinsic :: iso_fortran_env, only: int64, error_unit
     use BoardM, only: BoardT, generate_legal_moves
-    use ClockM, only: elapsed_time, init_limits, should_stop
+    use ClockM, only: elapsed_time_ms, init_limits, should_stop
     use EvaluationM, only: EVK, DRAW, MATE
     use MoveM, only: MVK, get_uci
     use PieceM, only: WHITE
@@ -111,14 +111,14 @@ contains
 
       ! progress report; score/PV reporting separately
       write (output_unit, '(a,i0,a,i0,a,i0,a,a)') &
-        "info depth ", depth, " nodes ", board%control%nodes, &
-        " time ", elapsed_time(board%control), &
+        "info depth ", depth, " nodes ", board%control%node_count, &
+        " time ", elapsed_time_ms(board%control), &
         " pv ", trim(get_uci(move))
       flush (output_unit)
 
       if (.not. board%limits%infinite) then
-        if (depth >= board%limits%depth) exit
-        if (elapsed_time(board%control) >= board%control%soft_ms) exit
+        if (depth >= board%limits%depth_limit) exit
+        if (elapsed_time_ms(board%control) >= board%control%soft_ms) exit
       end if
 
       depth = depth + 1
@@ -251,7 +251,7 @@ contains
     ! when should_stop becomes true, immediately unwind
     if (should_stop(board%control)) return
 
-    board%control%nodes = board%control%nodes + 1_int64
+    board%control%node_count = board%control%node_count + 1_int64
 
     ! repetition, fifty-move rule, insufficient material
     if (is_draw(board)) return

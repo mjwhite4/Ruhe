@@ -81,7 +81,7 @@ contains
     use, intrinsic :: iso_fortran_env, only: real64
     use iso_fortran_env, only: error_unit, output_unit
     use BoardM, only: BoardT, get_board, set_fen, generate_legal_moves
-    use ClockM, only: elapsed_time
+    use ClockM, only: elapsed_time_ms
     use MoveM, only: MVK, get_uci
     use SearchM, only: alphabeta, negamax, search_deeper, SearchResultT
     use StringUtilsM, only: next_token
