@@ -2,7 +2,7 @@ program test_go_parser
 
   use iso_fortran_env, only: int64, error_unit
   use BoardM, only: BoardT, get_board
-  use UciM, only: set_control
+  use UciM, only: set_searching
   use TestUtilsM, only: begin_suite, begin_test, fail, pass
   implicit none
 
@@ -15,50 +15,50 @@ program test_go_parser
 
   ! Basic depth.
   call begin_test("basic depth")
-  call set_control(board, "go depth 5", status)
+  call set_searching(board, "go depth 5", status)
   call check(status == 0, "depth accepted")
-  call check(board%limits%depth_limit == 5, "depth stored")
+  call check(board%request%depth_limit == 5, "depth stored")
   call pass()
 
   ! All clock fields, with different values to catch swapped assignments.
   call begin_test("all clock fields, swapped assignments")
-  call set_control(board, &
+  call set_searching(board, &
            "go wtime 60000 btime 45000 winc 1000 binc 500 movestogo 20", status)
 
   call check(status == 0, "clock command accepted")
-  call check(board%limits%white_time_ms == 60000_int64, "wtime")
-  call check(board%limits%black_time_ms == 45000_int64, "btime")
-  call check(board%limits%white_increment_ms == 1000_int64, "winc")
-  call check(board%limits%black_increment_ms == 500_int64, "binc")
-  call check(board%limits%moves_to_go == 20, "movestogo")
+  call check(board%request%white_time_ms == 60000_int64, "wtime")
+  call check(board%request%black_time_ms == 45000_int64, "btime")
+  call check(board%request%white_increment_ms == 1000_int64, "winc")
+  call check(board%request%black_increment_ms == 500_int64, "binc")
+  call check(board%request%moves_to_go == 20, "movestogo")
   call pass()
 
-  ! Independent limits may appear together.
-  call begin_test("independent limits together")
-  call set_control(board, &
-                   "go depth 8 nodes 100000 movetime 1500", status)
-  call check(status == 0, "combined limits accepted")
-  call check(board%limits%depth_limit == 8, "combined depth")
-  call check(board%limits%node_limit == 100000_int64, "combined nodes")
-  call check(board%limits%movetime_ms == 1500_int64, "combined movetime")
+  ! Independent request may appear together.
+  call begin_test("independent request together")
+  call set_searching(board, &
+                     "go depth 8 nodes 100000 movetime 1500", status)
+  call check(status == 0, "combined request accepted")
+  call check(board%request%depth_limit == 8, "combined depth")
+  call check(board%request%node_limit == 100000_int64, "combined nodes")
+  call check(board%request%movetime_ms == 1500_int64, "combined movetime")
   call pass()
 
-  ! No stale limits from the previous command.
-  call begin_test("no stale limits from the previous command")
-  call set_control(board, "go depth 2", status)
+  ! No stale request from the previous command.
+  call begin_test("no stale request from the previous command")
+  call set_searching(board, "go depth 2", status)
   call check(status == 0, "second command accepted")
-  call check(board%limits%movetime_ms == -1_int64, "movetime reset")
-  call check(board%limits%node_limit == huge(0_int64), "nodes reset")
-  call check(board%limits%white_time_ms == -1_int64, "clock reset")
+  call check(board%request%movetime_ms == -1_int64, "movetime reset")
+  call check(board%request%node_limit == huge(0_int64), "nodes reset")
+  call check(board%request%white_time_ms == -1_int64, "clock reset")
 
-  call set_control(board, "go infinite", status)
+  call set_searching(board, "go infinite", status)
   call check(status == 0, "infinite accepted")
-  call check(board%limits%infinite, "infinite stored")
+  call check(board%request%infinite, "infinite stored")
 
-  call set_control(board, "go depth 1", status)
-  call check(.not. board%limits%infinite, "infinite reset")
+  call set_searching(board, "go depth 1", status)
+  call check(.not. board%request%infinite, "infinite reset")
 
-  call set_control(board, "go winc 0 binc 0", status)
+  call set_searching(board, "go winc 0 binc 0", status)
   call check(status == 0, "zero increments accepted")
   call pass()
 
@@ -93,7 +93,7 @@ contains
     character(len=*), intent(in) :: command
     integer :: res
 
-    call set_control(board, command, res)
+    call set_searching(board, command, res)
     call check(res /= 0, "reject "//command)
   end subroutine
 

@@ -22,7 +22,7 @@ module BoardM
   use, intrinsic :: iso_fortran_env, only: int8, int16
   use BaseM, only: BaseT, STARTING_BOARD_FEN
   use BitboardM, only: BBK
-  use ClockM, only: LimitsT, ControlT
+  use ClockM, only: SearchRequestT, SearchStateT
   use EvaluationM, only: EVK
   use MoveStackM, only: MVK, MoveStackT
   use PieceM, only: PCK
@@ -69,8 +69,8 @@ module BoardM
     type(StateT), dimension(MAX_GAME_PLY) :: state_sequence ! possible moves
     integer(MVK), dimension(MAX_GAME_PLY) :: move_sequence ! possible moves
     integer :: game_ply
-    type(LimitsT) :: limits
-    type(ControlT) :: control
+    type(SearchRequestT) :: request
+    type(SearchStateT) :: searching
   contains
 
     ! state, FEN, and utility methods

@@ -88,7 +88,7 @@ contains
     use, intrinsic :: iso_fortran_env, only: real64
     use iso_fortran_env, only: error_unit
     use BoardM, only: BoardT, get_board, get_fen, set_fen, generate_legal_moves
-    use ClockM, only: LimitsT, init_limits
+    use ClockM, only: SearchRequestT, init_searching
     use EvaluationM, only: EVK, MATE
     use MoveM, only: MVK, get_uci
     use PieceM, only: WHITE
@@ -146,15 +146,16 @@ contains
 
       alphabeta_out = SearchResultT()
 
-      board%limits = LimitsT()
-      call init_limits(board%limits, board%state%turn == WHITE, board%control)
-      board%control%poll_input = .false.
+      board%request = SearchRequestT()
+      call init_searching(board%request, board%state%turn == WHITE, &
+                          board%searching)
+      board%searching%poll_input = .false.
 
       call alphabeta(board, depth, 0, -MATE, MATE, &
                      alphabeta_out%move, alphabeta_out%score, &
                      alphabeta_out%nnodes)
 
-      if (board%control%is_stopped) then
+      if (board%searching%is_stopped) then
         call fail("alphabeta stopped before completing the test")
       end if
 

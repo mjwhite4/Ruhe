@@ -30,7 +30,7 @@ module UciM
     init_new_game, &
     print_result, &
     print_uci_info, &
-    set_control
+    set_searching
 
 contains
 
@@ -244,15 +244,15 @@ contains
         case ("go")
           !! @brief search according to parameters and yield bestmove
 
-          ! set_control
-          call set_control(board, command)
+          ! set_searching
+          call set_searching(board, command)
 
           ! search
           call search_deeper(board, search_out)
 
           write (output_unit, "(a)") "bestmove "//get_uci(search_out%move)
           flush (output_unit)
-          quit_requested = board%control%quit_requested
+          quit_requested = board%searching%quit_requested
 
         !! @brief uci
         case ("uci")
@@ -418,13 +418,13 @@ contains
       " pv ", pv_str
   end subroutine print_uci_info
 
-  !! @brief parse uci "go" parameters and populate control and limits
-  subroutine set_control(bd, cmd_str, status_opt)
+  !! @brief parse uci "go" parameters and populate request, searching
+  subroutine set_searching(bd, cmd_str, status_opt)
 
     use, intrinsic :: iso_fortran_env, only: output_unit
 
     use BoardM, only: BoardT
-    use ClockM, only: LimitsT
+    use ClockM, only: SearchRequestT
     use StringUtilsM, only: next_token, to_int, to_str
 
     type(BoardT), intent(inout) :: bd
@@ -434,7 +434,7 @@ contains
     character(len=:), allocatable :: token
     integer :: ipos, status
 
-    bd%limits = LimitsT()
+    bd%request = SearchRequestT()
 
     status = 0
     if (present(status_opt)) status_opt = 0
@@ -458,9 +458,9 @@ contains
         if (len_trim(token) == 0) then
           status = 1
         else
-          call to_int(token, bd%limits%black_increment_ms, status)
+          call to_int(token, bd%request%black_increment_ms, status)
           if (status == 0) then
-            if (bd%limits%black_increment_ms < 0) status = 2
+            if (bd%request%black_increment_ms < 0) status = 2
           end if
         end if
 
@@ -471,9 +471,9 @@ contains
         if (len_trim(token) == 0) then
           status = 3
         else
-          call to_int(token, bd%limits%black_time_ms, status)
+          call to_int(token, bd%request%black_time_ms, status)
           if (status == 0) then
-            if (bd%limits%black_time_ms < 1) status = 4
+            if (bd%request%black_time_ms < 1) status = 4
           end if
         end if
 
@@ -484,15 +484,15 @@ contains
         if (len_trim(token) == 0) then
           status = 5
         else
-          call to_int(token, bd%limits%depth_limit, status)
+          call to_int(token, bd%request%depth_limit, status)
           if (status == 0) then
-            if (bd%limits%depth_limit < 1) status = 6
+            if (bd%request%depth_limit < 1) status = 6
           end if
         end if
 
       case ("infinite")
         ! @brief whether to calculate forever (until quit/stop)
-        bd%limits%infinite = .true.
+        bd%request%infinite = .true.
 
       case ("nodes")
         ! @brief limit search according to visited nodes
@@ -501,15 +501,15 @@ contains
         if (len_trim(token) == 0) then
           status = 7
         else
-          call to_int(token, bd%limits%node_limit, status)
+          call to_int(token, bd%request%node_limit, status)
           if (status == 0) then
-            if (bd%limits%node_limit < 1) status = 8
+            if (bd%request%node_limit < 1) status = 8
           end if
         end if
 
       case ("ponder")
         ! @brief whether permissible to search on opponent's time
-        bd%limits%ponder = .true.
+        bd%request%ponder = .true.
 
       case ("movetime")
         ! @brief limit search time to exactly N milliseconds
@@ -518,9 +518,9 @@ contains
         if (len_trim(token) == 0) then
           status = 9
         else
-          call to_int(token, bd%limits%movetime_ms, status)
+          call to_int(token, bd%request%movetime_ms, status)
           if (status == 0) then
-            if (bd%limits%movetime_ms < 1) status = 10
+            if (bd%request%movetime_ms < 1) status = 10
           end if
         end if
 
@@ -531,9 +531,9 @@ contains
         if (len_trim(token) == 0) then
           status = 11
         else
-          call to_int(token, bd%limits%moves_to_go, status)
+          call to_int(token, bd%request%moves_to_go, status)
           if (status == 0) then
-            if (bd%limits%moves_to_go < 1) status = 12
+            if (bd%request%moves_to_go < 1) status = 12
           end if
         end if
 
@@ -544,9 +544,9 @@ contains
         if (len_trim(token) == 0) then
           status = 13
         else
-          call to_int(token, bd%limits%white_increment_ms, status)
+          call to_int(token, bd%request%white_increment_ms, status)
           if (status == 0) then
-            if (bd%limits%white_increment_ms < 0) status = 14
+            if (bd%request%white_increment_ms < 0) status = 14
           end if
         end if
 
@@ -557,15 +557,15 @@ contains
         if (len_trim(token) == 0) then
           status = 15
         else
-          call to_int(token, bd%limits%white_time_ms, status)
+          call to_int(token, bd%request%white_time_ms, status)
           if (status /= 0) then
-            if (bd%limits%white_time_ms < 1) status = 16
+            if (bd%request%white_time_ms < 1) status = 16
           end if
         end if
 
       case default
         ! TODO ignore perft for now
-        error stop "set_control, unknown go:"//trim(cmd_str(ipos:))
+        error stop "set_searching, unknown go:"//trim(cmd_str(ipos:))
         call flush (output_unit)
 
       end select
@@ -575,10 +575,10 @@ contains
         status_opt = status
         return
       end if
-      error stop "set_control, status="//to_str(status)
+      error stop "set_searching, status="//to_str(status)
       end if
 
     end do
-  end subroutine set_control
+  end subroutine set_searching
 
 end module UciM

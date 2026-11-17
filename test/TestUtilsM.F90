@@ -18,7 +18,7 @@ module TestUtilsM
 
   use, intrinsic :: iso_fortran_env, only: int64, real64
   use BoardM, only: BoardT, get_board, reset_board, set_fen
-  use ClockM, only: ControlT, elapsed_time_ms
+  use ClockM, only: SearchStateT, elapsed_time_ms
   use MoveStackM, only: reset_movestack
   use PerftM, only: perft
 
@@ -122,11 +122,12 @@ contains
       print '(a, i0)', "go perft ", ref_depth
     end if
 
-    call system_clock(board%control%start_tick, board%control%clock_ticks_per_second)
+    call system_clock(board%searching%start_tick, &
+                      board%searching%clock_ticks_per_second)
     call reset_movestack(board%stack)
     call perft(board, ref_depth, total_nodes, do_breakdown)
 
-    ms = elapsed_time_ms(board%control)
+    ms = elapsed_time_ms(board%searching)
 
     knps = real(total_nodes, real64)/max(ms, 0.1_real64)
 

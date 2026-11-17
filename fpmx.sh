@@ -8,7 +8,7 @@
 #   ./fpmx.sh clean
 set -eo pipefail
 
-FPM="fortran-fpm"
+FPM="fpm"
 
 PROJECT_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 cd -- "$PROJECT_ROOT"
