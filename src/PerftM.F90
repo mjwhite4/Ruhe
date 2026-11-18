@@ -35,7 +35,10 @@ contains
     use BaseM, only: print_mailbox
     use BoardM, only: BoardT, make_move, unmake_move
 #ifdef DEBUG
-    use BoardM, only: get_fen
+    use BoardM, only: get_fen, calculate_full_hash
+    use EvaluationM, only: EVK
+    use StringUtilsM, only: to_hex
+    use ZobristM, only: ZHK
 #endif
 
     ! use BoardM, only: is_check, generate_legal_moves, get_fen
@@ -57,6 +60,11 @@ contains
 
 #ifdef DEBUG
     character(len=147) :: fen_before, fen_after
+    integer(ZHK) :: hash_before, hash_after
+    integer(EVK) :: &
+      score_before, score_after, &
+      score_mg_before, score_mg_after, &
+      phase_before, phase_after
 #endif
 
     ! reset accumulators
@@ -85,20 +93,16 @@ contains
 
 #ifdef DEBUG
     fen_before = get_fen(board)
+    hash_before = board%state%h
+    score_before = board%score
+    score_mg_before = board%score_mg
+    phase_before = board%phase
 #endif
 
     !! tally sub-tree move counts
     p = board%stack%current_ply
     do i = board%stack%ix1(p), board%stack%ixn(p)
       mv = board%stack%move_list(i)
-
-#ifdef DEBUG
-      if (.not. board%verify_hash()) then
-        print '(a, a, a, a)', "position fen ", trim(fen_before), &
-          ' moves ', get_uci(mv)
-        error stop "L106: verify_hash fail"
-      end if
-#endif
 
       ! if move mv would place king in check
       call board%is_into_check(mv, tf)
@@ -122,12 +126,31 @@ contains
       if (fen_before /= fen_after) then
         write (error_unit, "(a,a)") "fen_before=", trim(fen_before)
         write (error_unit, "(a,a)") "fen_after =", trim(fen_after)
-        error stop "perft: unmake_move failed to restore original state"
+        error stop "perft: unmake_move failed to restore original FEN"
       end if
 
+      hash_after = calculate_full_hash(board)
+      if (hash_before /= board%state%h) then
+        write (error_unit, "(a,a)") "hash_before=", trim(to_hex(hash_before))
+        write (error_unit, "(a,a)") "hash_after =", trim(to_hex(hash_after))
+        error stop "perft: unmake_move failed to restore original hash code"
+      end if
       if (.not. board%verify_hash()) then
         print '(a)', trim(fen_before)
         error stop "L137: verify_hash fail"
+      end if
+
+      score_after = board%score
+      score_mg_after = board%score_mg
+      phase_after = board%phase
+      if (score_after /= score_before .or. &
+          score_mg_after /= score_mg_before .or. &
+          phase_after /= phase_before) then
+        write (error_unit, "(a,i0,a,i0,a,i0)") "score before=", &
+          score_before, ", ", score_mg_before, ", ", phase_before
+        write (error_unit, "(a,i0,a,i0,a,i0)") "score after=", &
+          score_after, ", ", score_mg_after, ", ", phase_after
+        error stop "perft: unmake_move failed to restore original score"
       end if
 #endif
 
@@ -140,25 +163,6 @@ contains
     end do
 
   end subroutine perft
-
-  !@brief convert clocks to elapsed time
-! pure function elapsed_time(clock_start, clock_rate, clock_max, clock_end) &
-!   result(sec)
-
-!   integer(kind=int64), intent(in) :: clock_start, clock_rate, clock_max, &
-!                                      clock_end
-!   real(kind=real64) :: sec
-
-!   integer(kind=int64) :: clock_elapsed
-
-!   if (clock_end >= clock_start) then
-!     clock_elapsed = clock_end - clock_start
-!   else
-!     ! addition by clock_max prevents clock count wrap-around
-!     clock_elapsed = clock_end + clock_max - clock_start
-!   end if
-!   sec = real(clock_elapsed, real64)/real(clock_rate, real64)
-! end function elapsed_time
 
   !! @brief set up call to recursive perft
   subroutine run_perft(board, depth)
