@@ -16,7 +16,6 @@
 !-
 program test_search
 
-  use, intrinsic :: iso_fortran_env, only: int64, output_unit
   use EvaluationM, only: EVK, DRAW, MATE
   use TestUtilsM, only: begin_suite, begin_test, pass, fail
   implicit none
@@ -79,18 +78,15 @@ contains
 
   subroutine assert_search(test_name, fen, ref_nmoves, ref_score, ref_bm)
 
-    use, intrinsic :: iso_fortran_env, only: real64
-    use iso_fortran_env, only: error_unit
     use BoardM, only: BoardT, get_board, get_fen, set_fen, generate_legal_moves
     use ClockM, only: SearchRequestT, init_searching
     use EvaluationM, only: EVK, MATE
     use MoveM, only: MVK, get_uci
     use PieceM, only: WHITE
-    use SearchM, only: alphabeta, negamax, search_deeper, SearchResultT
-    use StringUtilsM, only: next_token, to_hex, to_str
+    use SearchM, only: alphabeta, negamax, SearchResultT
+    use StringUtilsM, only: next_token, to_str
     use TestUtilsM, only: &
       PositionCheckpointT, save_checkpoint, check_checkpoint
-    use ZobristM, only: ZHK
 
     character(len=*), intent(in) :: test_name, fen
     integer, intent(in), optional :: ref_nmoves
@@ -98,14 +94,11 @@ contains
     character(len=*), intent(in), optional :: ref_bm
 
     type(BoardT), pointer :: board
-    integer :: depth, i, ipos, nmoves, p
+    integer :: depth, ipos, nmoves
     character(len=512) :: message_txt
     character(len=:), allocatable :: token
     type(SearchResultT) :: alphabeta_out, negamax_out
     logical :: found
-!   integer(MVK), dimension(:), allocatable :: moves
-!   integer(EVK) :: v
-!   integer(ZHK) :: h
     type(PositionCheckpointT) :: checkpoint
 
     call begin_test(test_name)
@@ -117,28 +110,20 @@ contains
 
     message_txt = ""
 
-    ! save legal moves, ply, evaluation, and hash
-!   p = board%stack%current_ply
-!   allocate (moves(nmoves))
-!   moves = board%stack%move_list(board%stack%ix1(p):board%stack%ixn(p))
-!   v = board%score
-!   h = board%state%h
+    if (fen /= get_fen(board)) then
+      call fail("initial FEN differs from requested position")
+    elseif (.not. board%verify_hash()) then
+      call fail("initial hash code differs from full calculation")
+    end if
 
     call save_checkpoint(board, checkpoint)
 
-!   ! if search nmoves and ref_nmoves are mismatched, fail
-!   if (present(ref_nmoves)) then
-!     if (nmoves /= ref_nmoves) then
-!       write (unit=message_txt, fmt='(a,i0,a,i0)') &
-!         " nmoves:", nmoves, &
-!         " ref_nmoves:", ref_nmoves
-!       call fail((message_txt))
-!     end if
-!   end if
-
-!   if (fen /= get_fen(board)) then
-!     error stop "fen /= get_fen(board) before search:"//trim(fen)
-!   end if
+    ! if search nmoves and ref_nmoves are mismatched, fail
+    if (present(ref_nmoves)) then
+      if (nmoves /= ref_nmoves) then
+        call fail("nmoves:"//to_str(nmoves)//" ref_nmoves:"//to_str(ref_nmoves))
+      end if
+    end if
 
     do depth = 1, 3
 
@@ -152,6 +137,7 @@ contains
       call alphabeta(board, depth, 0, -MATE, MATE, &
                      alphabeta_out%move, alphabeta_out%score, &
                      alphabeta_out%nnodes)
+      call check_checkpoint(board, checkpoint)
 
       if (board%searching%is_stopped) then
         call fail("alphabeta stopped before completing the test")
@@ -196,7 +182,6 @@ contains
       negamax_out = SearchResultT()
       call negamax(board, depth, 0, &
                    negamax_out%move, negamax_out%score, negamax_out%nnodes)
-
       call check_checkpoint(board, checkpoint)
 
 !     ! compare fen, score, hashi, nmoves before-after restoration
