@@ -17,7 +17,7 @@
 program test_state
 
   use, intrinsic :: iso_fortran_env, only: int8, int16
-  use TestUtilsM, only: begin_suite, begin_test, pass, fail
+  use TestUtilsM, only: begin_suite, begin_test, pass_msg, fail_msg
   use PieceM, only: WHITE, BLACK
   use SquareM, only: SQ_A1, SQ_E1, SQ_H1, SQ_A8, SQ_E8, SQ_H8, SQ_E3, SQ_E6, &
                      EP_NONE
@@ -41,10 +41,10 @@ program test_state
       st%ep_sq /= EP_NONE .or. &
       st%halfmove_clock /= 0_int16 .or. &
       st%fullmove_number /= 1_int16) then
-    call fail("new_state default properties mismatch")
+    call fail_msg("new_state default properties mismatch")
   end if
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Castling Masks & Rights Queries
@@ -53,26 +53,26 @@ program test_state
 
   if (W_OO_MASK /= 1_CSK .or. W_OOO_MASK /= 2_CSK .or. &
       B_OO_MASK /= 4_CSK .or. B_OOO_MASK /= 8_CSK) then
-    call fail("castling mask constants mismatch")
+    call fail_msg("castling mask constants mismatch")
   end if
 
  if (W_CS_MASK /= 3_CSK .or. B_CS_MASK /= 12_CSK .or. WB_CS_MASK /= 15_CSK) then
-    call fail("combined castling mask constants mismatch")
+    call fail_msg("combined castling mask constants mismatch")
   end if
 
   rights = ior(W_OO_MASK, B_OOO_MASK) ! White Kingside + Black Queenside
 
   if (.not. has_kingside_castling_rights(rights, WHITE) .or. &
       has_queenside_castling_rights(rights, WHITE)) then
-    call fail("white castling rights query mismatch")
+    call fail_msg("white castling rights query mismatch")
   end if
 
   if (has_kingside_castling_rights(rights, BLACK) .or. &
       .not. has_queenside_castling_rights(rights, BLACK)) then
-    call fail("black castling rights query mismatch")
+    call fail_msg("black castling rights query mismatch")
   end if
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Castling Update Mask Rules
@@ -83,35 +83,35 @@ program test_state
 
   ! White King moves (E1) -> clear all White rights
   if (iand(rights, CS_UPDATE_MASK(SQ_E1)) /= B_CS_MASK) then
-    call fail("moving white king did not clear all white castling rights")
+    call fail_msg("moving white king did not clear all white castling rights")
   end if
 
   ! White A1 Rook moves -> clear White Queenside
   if (iand(rights, CS_UPDATE_MASK(SQ_A1)) /= (WB_CS_MASK - W_OOO_MASK)) then
-    call fail("moving white a1 rook did not clear white queenside rights")
+    call fail_msg("moving white a1 rook did not clear white queenside rights")
   end if
 
   ! White H1 Rook moves -> clear White Kingside
   if (iand(rights, CS_UPDATE_MASK(SQ_H1)) /= (WB_CS_MASK - W_OO_MASK)) then
-    call fail("moving white h1 rook did not clear white kingside rights")
+    call fail_msg("moving white h1 rook did not clear white kingside rights")
   end if
 
   ! Black King moves (E8) -> clear all Black rights
   if (iand(rights, CS_UPDATE_MASK(SQ_E8)) /= W_CS_MASK) then
-    call fail("moving black king did not clear all black castling rights")
+    call fail_msg("moving black king did not clear all black castling rights")
   end if
 
   ! Black A8 Rook moves -> clear Black Queenside
   if (iand(rights, CS_UPDATE_MASK(SQ_A8)) /= (WB_CS_MASK - B_OOO_MASK)) then
-    call fail("moving black a8 rook did not clear black queenside rights")
+    call fail_msg("moving black a8 rook did not clear black queenside rights")
   end if
 
   ! Black H8 Rook moves -> clear Black Kingside
   if (iand(rights, CS_UPDATE_MASK(SQ_H8)) /= (WB_CS_MASK - B_OO_MASK)) then
-    call fail("moving black h8 rook did not clear black kingside rights")
+    call fail_msg("moving black h8 rook did not clear black kingside rights")
   end if
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! FEN State String Formatting
@@ -120,7 +120,7 @@ program test_state
 
   st = new_state()
   if (trim(get_state_str(st)) /= "w KQkq - 0 1") then
-    call fail("default state string output mismatch")
+    call fail_msg("default state string output mismatch")
   end if
 
   st = new_state(turn_opt=BLACK, &
@@ -130,16 +130,16 @@ program test_state
   st%fullmove_number = 12_int16
 
   if (trim(get_state_str(st)) /= "b Qk e6 3 12") then
-    call fail("custom state string output mismatch")
+    call fail_msg("custom state string output mismatch")
   end if
 
   st%castling_rights = 0_CSK
   st%ep_sq = EP_NONE
   if (trim(get_state_str(st)) /= "b - - 3 12") then
-    call fail("no-rights state string output mismatch")
+    call fail_msg("no-rights state string output mismatch")
   end if
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Zobrist Hash Incremental Updates
@@ -160,9 +160,9 @@ program test_state
                           ep_sq_opt=SQ_E3)
 
   if (st2%h /= st_expected%h) then
-    call fail("incremental hash mismatch compared to full hash generation")
+    call fail_msg("incremental hash mismatch compared to full hash generation")
   end if
 
-  call pass()
+  call pass_msg()
 
 end program test_state

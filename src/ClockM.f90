@@ -26,7 +26,7 @@ module ClockM
   private
   public :: &
     elapsed_time_ms, &
-    init_searching, &
+    init_search, &
     limits_reached, &
     poll_search_commands, &
     should_stop
@@ -80,7 +80,7 @@ module ClockM
     ! reaching this count causes stopping at the next stop check.
 
     integer(int64) :: start_tick = 0
-    ! SYSTEM_CLOCK count captured when searching is initialized.
+    ! SYSTEM_CLOCK count captured when search is initialized.
     ! A clock reading in ticks, not a duration in milliseconds
 
     integer(int64) :: clock_ticks_per_second = 0
@@ -98,7 +98,7 @@ module ClockM
 
     logical :: is_stopped = .false.
     ! search-stop state: set when the budget is exhausted, stop, quit, EOF, or input error
-    ! remains true until searching is reinitialized
+    ! remains true until search is reinitialized
 
     logical :: quit_requested = .false.
     ! whther to terminate the engine after search unwinds
@@ -112,39 +112,38 @@ module ClockM
 contains
 
   ! @brief report elapsed wall time
-  function elapsed_time_ms(searching) result(ms)
+  function elapsed_time_ms(search) result(ms)
 
-    type(SearchStateT), intent(in) :: searching
+    type(SearchStateT), intent(in) :: search
     integer(int64) :: ms
     integer(int64) :: now_tick
 
     call system_clock(now_tick)
     ! Assume the clock increases without wrapping
-    ms = 1000*(now_tick - searching%start_tick)/searching%clock_ticks_per_second
+    ms = 1000*(now_tick - search%start_tick)/search%clock_ticks_per_second
   end function elapsed_time_ms
 
-  ! @brief fix default search searching, limits
-  subroutine init_searching(request, is_wtm, searching)
+  ! @brief fix default search search, limits
+  subroutine init_search(request, is_wtm, search)
 
     type(SearchRequestT), intent(in) :: request
     logical, intent(in) :: is_wtm
-    type(SearchStateT), intent(out) :: searching
+    type(SearchStateT), intent(out) :: search
 
     integer(int64) :: &
       remaining_ms, increment_ms, available_ms, target_ms
     integer :: moves
 
-    call system_clock(searching%start_tick, &
-                      searching%clock_ticks_per_second)
-    if (searching%clock_ticks_per_second <= 0) error stop "No system clock"
+    call system_clock(search%start_tick, search%clock_ticks_per_second)
+    if (search%clock_ticks_per_second <= 0) error stop "No system clock"
 
-    searching%node_limit = request%node_limit
+    search%node_limit = request%node_limit
 
     if (request%infinite) return
 
     if (request%movetime_ms >= 0) then
-      searching%hard_ms = request%movetime_ms
-      searching%soft_ms = searching%hard_ms
+      search%hard_ms = request%movetime_ms
+      search%soft_ms = search%hard_ms
       return
     end if
 
@@ -166,30 +165,30 @@ contains
 
     target_ms = available_ms/moves + (increment_ms*4)/5
 
-    searching%soft_ms = min(available_ms, target_ms)
-    searching%hard_ms = min(available_ms, 3*target_ms)
-  end subroutine init_searching
+    search%soft_ms = min(available_ms, target_ms)
+    search%hard_ms = min(available_ms, 3*target_ms)
+  end subroutine init_search
 
   ! @brief helper
-  pure logical function limits_reached(searching, elapsed_ms) result(tf)
+  pure logical function limits_reached(search, elapsed_ms) result(tf)
 
-    type(SearchStateT), intent(in) :: searching
+    type(SearchStateT), intent(in) :: search
     integer(int64), intent(in) :: elapsed_ms
 
-    tf = searching%is_stopped .or. &
-         searching%node_count >= searching%node_limit .or. &
-         elapsed_ms >= searching%hard_ms
+    tf = search%is_stopped .or. &
+         search%node_count >= search%node_limit .or. &
+         elapsed_ms >= search%hard_ms
   end function
 
   ! @brief attend (non-blocking) any command input during search
-  subroutine poll_search_commands(searching)
+  subroutine poll_search_commands(search)
 
     use iso_c_binding, only: c_int
     use iso_fortran_env, only: output_unit
     use NonBlockingM, only: uci_next_command, &
                            READ_EOF, READ_NO_LINE, READ_IOS_ERROR, READ_OVERFLOW
 
-    type(SearchStateT), intent(inout) :: searching
+    type(SearchStateT), intent(inout) :: search
     character(len=8192) :: command
     integer(c_int) :: status
     integer :: i
@@ -203,14 +202,14 @@ contains
         return
 
       case (READ_EOF)
-        searching%is_stopped = .true.
-        searching%quit_requested = .true.
+        search%is_stopped = .true.
+        search%quit_requested = .true.
         return
 
       case (READ_IOS_ERROR, READ_OVERFLOW)
-        searching%is_stopped = .true.
-        searching%quit_requested = .true.
-        ! searching%input_failed = .true.
+        search%is_stopped = .true.
+        search%quit_requested = .true.
+        ! search%input_failed = .true.
         return
       end select
 
@@ -221,12 +220,12 @@ contains
         cycle
 
       case ("stop")
-        searching%is_stopped = .true.
+        search%is_stopped = .true.
         return
 
       case ("quit")
-        searching%is_stopped = .true.
-        searching%quit_requested = .true.
+        search%is_stopped = .true.
+        search%quit_requested = .true.
         return
 
       case ("isready")
@@ -242,14 +241,14 @@ contains
   end subroutine poll_search_commands
 
   ! @brief shared stop test
-  function should_stop(searching) result(is_stopped)
+  function should_stop(search) result(is_stopped)
 
-    type(SearchStateT), intent(inout) :: searching
+    type(SearchStateT), intent(inout) :: search
     logical :: is_stopped
 
-    if (searching%poll_input) call poll_search_commands(searching)
-    searching%is_stopped = limits_reached(searching, elapsed_time_ms(searching))
-    is_stopped = searching%is_stopped
+    if (search%poll_input) call poll_search_commands(search)
+    search%is_stopped = limits_reached(search, elapsed_time_ms(search))
+    is_stopped = search%is_stopped
   end function should_stop
 
 end module ClockM

@@ -31,6 +31,7 @@ module StateM
     get_state_str, &
     has_kingside_castling_rights, &
     has_queenside_castling_rights, &
+    equal_state, &
     update_state_hash
 
   integer, parameter, public :: &
@@ -110,6 +111,22 @@ contains
     if (state%ep_sq /= EP_NONE) &
       h = ieor(h, ZHASH_EP_FILE(SQUARE_FILE(state%ep_sq)))
   end function calculate_state_hash
+
+  !! @brief equality test, ==
+  pure elemental function equal_state(a, b) result(tf)
+
+    type(StateT), intent(in) :: a, b
+
+    logical :: tf
+
+    tf = ( &
+         a%turn == b%turn .and. &
+         a%castling_rights == b%castling_rights .and. &
+         a%ep_sq == b%ep_sq .and. &
+         a%halfmove_clock == b%halfmove_clock .and. &
+         a%fullmove_number == b%fullmove_number .and. &
+         a%h == b%h)
+  end function equal_state
 
   !! @brief ret state part of fen string, e.g. "w KQkq e6 3 6"
   pure function get_state_str(state) result(str)

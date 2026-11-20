@@ -14,13 +14,13 @@
 ! You should have received a copy of the GNU General Public License
 ! along with this program.  If not, see <https://www.gnu.org/licenses/>.
 !-
-program test_search
+program test_search_correctness
 
   use EvaluationM, only: EVK, DRAW, MATE
-  use TestUtilsM, only: begin_suite, begin_test, pass, fail
+  use TestUtilsM, only: begin_suite, begin_test, pass_msg, fail_msg
   implicit none
 
-  call begin_suite("test_search")
+  call begin_suite("test_search_correctness")
 
   call assert_search( &
     test_name="mate in one", &
@@ -79,7 +79,7 @@ contains
   subroutine assert_search(test_name, fen, ref_nmoves, ref_score, ref_bm)
 
     use BoardM, only: BoardT, get_board, get_fen, set_fen, generate_legal_moves
-    use ClockM, only: SearchRequestT, init_searching
+    use ClockM, only: SearchRequestT, init_search
     use EvaluationM, only: EVK, MATE
     use MoveM, only: MVK, get_uci
     use PieceM, only: WHITE
@@ -111,18 +111,18 @@ contains
     message_txt = ""
 
     if (fen /= get_fen(board)) then
-      call fail("initial FEN differs from requested position")
+      call fail_msg("initial FEN differs from requested position")
     elseif (.not. board%verify_hash()) then
-      call fail("initial hash code differs from full calculation")
+      call fail_msg("initial hash code differs from full calculation")
     end if
 
     call save_checkpoint(board, checkpoint)
 
     ! if search nmoves and ref_nmoves are mismatched, fail
     if (present(ref_nmoves)) then
-      if (nmoves /= ref_nmoves) then
-        call fail("nmoves:"//to_str(nmoves)//" ref_nmoves:"//to_str(ref_nmoves))
-      end if
+      if (nmoves /= ref_nmoves) &
+        call fail_msg("nmoves:"//to_str(nmoves)// &
+                      " ref_nmoves:"//to_str(ref_nmoves))
     end if
 
     do depth = 1, 3
@@ -130,108 +130,54 @@ contains
       alphabeta_out = SearchResultT()
 
       board%request = SearchRequestT()
-      call init_searching(board%request, board%state%turn == WHITE, &
-                          board%searching)
-      board%searching%poll_input = .false.
+      call init_search(board%request, board%state%turn == WHITE, board%search)
+      board%search%poll_input = .false.
 
       call alphabeta(board, depth, 0, -MATE, MATE, &
                      alphabeta_out%move, alphabeta_out%score, &
                      alphabeta_out%nnodes)
       call check_checkpoint(board, checkpoint)
 
-      if (board%searching%is_stopped) then
-        call fail("alphabeta stopped before completing the test")
+      if (board%search%is_stopped) then
+        call fail_msg("alphabeta stopped before completing the test")
       end if
-
-!     ! compare fen, score, and hash before-after restoration
-!     if (fen /= get_fen(board)) then
-!       call fail("fen not restored after alphabeta:"//get_fen(board))
-!     elseif (v /= board%score) then
-!       call fail("static value not restored after alphabeta:"// &
-!                 to_str(board%score))
-!     elseif (h /= board%state%h) then
-!       call fail("hash not restored after alphabeta:"// &
-!                 to_hex(board%state%h))
-!     end if
-
-!     ! compare ply, nmoves, moves before-after restoration
-!     if (p /= board%stack%current_ply) then
-!       call fail("p/=board%stack%current_ply not restored after alphabeta")
-!     elseif (nmoves /= board%stack%ixn(p) - board%stack%ix1(p) + 1) then
-!       call fail("nmoves/=ixn-ix1+1 not restored after alphabeta")
-!     end if
 
       ! ensure null move for terminal position
       if (nmoves == 0) then
         if (alphabeta_out%move /= 0_MVK) then
-          call fail("alphabeta: expected null move for terminal position")
+          call fail_msg("alphabeta: expected null move for terminal position")
         end if
       else if (.not. any(checkpoint%moves == alphabeta_out%move)) then
-        call fail("alphabeta: returned move is not legal")
+        call fail_msg("alphabeta: returned move is not legal")
       end if
-
-!     ! prove that each of moves(i) exists once within move_list(ix1:ixn)
-!     ! (and with above nmoves == ixn(p) - ix1(p) + 1, the converse)
-!     do i = 1, nmoves
-!       if (.not. count(moves(i) == board%stack%move_list( &
-!                       board%stack%ix1(p):board%stack%ixn(p))) == 1) then
-!         call fail("move not present after alphabeta:"//get_uci(moves(i)))
-!       end if
-!     end do
 
       negamax_out = SearchResultT()
       call negamax(board, depth, 0, &
                    negamax_out%move, negamax_out%score, negamax_out%nnodes)
       call check_checkpoint(board, checkpoint)
 
-!     ! compare fen, score, hashi, nmoves before-after restoration
-!     if (fen /= get_fen(board)) then
-!       call fail("fen not restored after negamax:"//get_fen(board))
-!     elseif (v /= board%score) then
-!       call fail("static value not restored after negamax:"// &
-!                 to_str(board%score))
-!     elseif (h /= board%state%h) then
-!       call fail("hash not restored after negamax:"//to_hex(board%state%h))
-!     end if
-
-!     ! compare ply, nmoves, and moves before-after restoration
-!     if (p /= board%stack%current_ply) then
-!       call fail("p/=board%stack%current_ply not restored after negamax")
-!     elseif (nmoves /= board%stack%ixn(p) - board%stack%ix1(p) + 1) then
-!       call fail("nmoves/=ixn-ix1+1 not restored after negamax")
-!     end if
-
-!     ! prove that each of moves(i) exists once within move_list(ix1:ixn)
-!     ! (and with above nmoves == ixn(p) - ix1(p) + 1, the converse)
-!     do i = 1, nmoves
-!       if (.not. count(moves(i) == board%stack%move_list( &
-!                       board%stack%ix1(p):board%stack%ixn(p))) == 1) then
-!         call fail("move not present after negamax:"//get_uci(moves(i)))
-!       end if
-!     end do
-
       ! compare search scores and ref_score
       if (alphabeta_out%score /= negamax_out%score) then
         write (unit=message_txt, fmt='(a,i0,a,i0)') &
           " alphabeta score:", alphabeta_out%score, &
           " negamax score:", negamax_out%score
-        call fail(trim(message_txt))
+        call fail_msg(trim(message_txt))
       else if (present(ref_score)) then
         if (negamax_out%score /= ref_score) then
           write (unit=message_txt, fmt='(a,i0,a,i0)') &
             " negamax score:", negamax_out%score, &
             " ref_score:", ref_score
-          call fail(trim(message_txt))
+          call fail_msg(trim(message_txt))
         end if
       end if
 
       ! ensure null move for terminal position
       if (nmoves == 0) then
         if (negamax_out%move /= 0_MVK) then
-          call fail("negamax: expected null move for terminal position")
+          call fail_msg("negamax: expected null move for terminal position")
         end if
       else if (.not. any(checkpoint%moves == negamax_out%move)) then
-        call fail("negamax: returned move is not legal")
+        call fail_msg("negamax: returned move is not legal")
       end if
 
       ! if searched move and not one of the ref_bm are matched, fail
@@ -247,14 +193,14 @@ contains
           end if
         end do
         if (.not. found) then
-          call fail(" | bm:"//get_uci(alphabeta_out%move)//" /= "// &
-                    "ref_bm:"//trim(ref_bm))
+          call fail_msg(" | bm:"//get_uci(alphabeta_out%move)//" /= "// &
+                        "ref_bm:"//trim(ref_bm))
         end if
       end if
     end do
 
-    call pass()
+    call pass_msg()
 
   end subroutine assert_search
 
-end program test_search
+end program test_search_correctness

@@ -30,7 +30,7 @@ module UciM
     init_new_game, &
     print_result, &
     print_uci_info, &
-    set_searching
+    set_search
 
 contains
 
@@ -244,15 +244,15 @@ contains
         case ("go")
           !! @brief search according to parameters and yield bestmove
 
-          ! set_searching
-          call set_searching(board, command)
+          ! set_search
+          call set_search(board, command)
 
           ! search
           call search_deeper(board, search_out)
 
           write (output_unit, "(a)") "bestmove "//get_uci(search_out%move)
           flush (output_unit)
-          quit_requested = board%searching%quit_requested
+          quit_requested = board%search%quit_requested
 
         !! @brief uci
         case ("uci")
@@ -418,8 +418,8 @@ contains
       " pv ", pv_str
   end subroutine print_uci_info
 
-  !! @brief parse uci "go" parameters and populate request, searching
-  subroutine set_searching(bd, cmd_str, status_opt)
+  !! @brief parse uci "go" parameters and populate request, search
+  subroutine set_search(bd, cmd_str, status_opt)
 
     use, intrinsic :: iso_fortran_env, only: output_unit
 
@@ -565,7 +565,7 @@ contains
 
       case default
         ! TODO ignore perft for now
-        error stop "set_searching, unknown go:"//trim(cmd_str(ipos:))
+        error stop "set_search, unknown go:"//trim(cmd_str(ipos:))
         call flush (output_unit)
 
       end select
@@ -575,10 +575,10 @@ contains
         status_opt = status
         return
       end if
-      error stop "set_searching, status="//to_str(status)
+      error stop "set_search, status="//to_str(status)
       end if
 
     end do
-  end subroutine set_searching
+  end subroutine set_search
 
 end module UciM

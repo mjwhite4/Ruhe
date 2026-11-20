@@ -17,7 +17,7 @@
 program test_perft
 
   use, intrinsic :: iso_fortran_env, only: int64
-  use TestUtilsM, only: assert_perft, begin_suite, begin_test, pass, fail
+  use TestUtilsM, only: assert_perft, begin_suite
   implicit none
 
   call begin_suite("test_perft")

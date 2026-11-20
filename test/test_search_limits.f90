@@ -14,16 +14,16 @@
 ! You should have received a copy of the GNU General Public License
 ! along with this program.  If not, see <https://www.gnu.org/licenses/>.
 !-
-program test_searching
+program test_search_limits
 
   use, intrinsic :: iso_fortran_env, only: int64
-  use TestUtilsM, only: begin_suite, begin_test, pass, fail
+  use TestUtilsM, only: begin_suite, begin_test, pass_msg, fail_msg
 
   use BoardM, only: STARTING_FEN
 
   implicit none
 
-  call begin_suite("test_searching")
+  call begin_suite("test_search_limits")
 
   call assert_search_request( &
     test_name="start position", &
@@ -35,7 +35,7 @@ contains
 
     use BoardM, only: &
       BoardT, get_board, get_fen, set_fen, generate_legal_moves
-    use ClockM, only: SearchRequestT, init_searching
+    use ClockM, only: SearchRequestT, init_search
     use EvaluationM, only: MATE
     use PieceM, only: WHITE
     use SearchM, only: alphabeta, SearchResultT
@@ -66,29 +66,28 @@ contains
     call save_checkpoint(board, checkpoint)
 
     if (.not. board%verify_hash()) &
-      call fail("root hash does not match full computation")
+      call fail_msg("root hash does not match full computation")
 
     !! establish node requirement with default unrestricted budget
     board%request = SearchRequestT() ! <-- HUGE default budget
-    call init_searching(board%request, board%state%turn == WHITE, &
-                        board%searching)
-    board%searching%poll_input = .false. ! <-- non-interactive for test
+    call init_search(board%request, board%state%turn == WHITE, board%search)
+    board%search%poll_input = .false. ! <-- non-interactive for test
     call alphabeta(board, 3, 0, -MATE, MATE, &
                    result_out%move, result_out%score, &
                    result_out%nnodes)
 
     ! verify search completed uninterrupted, fetch visit_count
-    if (board%searching%is_stopped) &
-      call fail("unrestricted depth 3 was interrupted")
-    if (board%searching%node_count <= 2_int64) &
-      call fail("depth 3 visited too few descendants")
-    if (board%searching%quit_requested) &
-      call fail("unrestricted search unexpectedly requested quit")
+    if (board%search%is_stopped) &
+      call fail_msg("unrestricted depth 3 was interrupted")
+    if (board%search%node_count <= 2_int64) &
+      call fail_msg("depth 3 visited too few descendants")
+    if (board%search%quit_requested) &
+      call fail_msg("unrestricted search unexpectedly requested quit")
 
     ! verify board is restored post-search
     call check_checkpoint(board, checkpoint)
 
-    visit_count = board%searching%node_count
+    visit_count = board%search%node_count
 
     !! one-node budget (=1)
     call set_fen(board, fen)
@@ -97,16 +96,15 @@ contains
     budget = 1_int64
     board%request = SearchRequestT()
     board%request%node_limit = budget ! interrupt before baseline completion
-    call init_searching(board%request, board%state%turn == WHITE, &
-                        board%searching)
-    board%searching%poll_input = .false. ! <-- non-interactive for test
+    call init_search(board%request, board%state%turn == WHITE, board%search)
+    board%search%poll_input = .false. ! <-- non-interactive for test
 
-    if (board%searching%node_count /= 0_int64) &
-      call fail("initial node count /= zero")
-    if (board%searching%node_limit /= 1_int64) &
-      call fail("one-node budget was not installed")
-    if (board%searching%is_stopped) &
-      call fail("stop flag already set before search")
+    if (board%search%node_count /= 0_int64) &
+      call fail_msg("initial node count /= zero")
+    if (board%search%node_limit /= 1_int64) &
+      call fail_msg("one-node budget was not installed")
+    if (board%search%is_stopped) &
+      call fail_msg("stop flag already set before search")
 
     call save_checkpoint(board, checkpoint)
 
@@ -117,12 +115,12 @@ contains
     call check_checkpoint(board, checkpoint)
 
     ! verify after search
-    if (board%searching%node_count /= budget) &
-      call fail("one-node search did not reach the exact budget")
-    if (.not. board%searching%is_stopped) &
-      call fail("one-node exhaustion did not set stop flag")
-    if (board%searching%quit_requested) &
-      call fail("one-node exhaustion unexpectedly requested quit")
+    if (board%search%node_count /= budget) &
+      call fail_msg("one-node search did not reach the exact budget")
+    if (.not. board%search%is_stopped) &
+      call fail_msg("one-node exhaustion did not set stop flag")
+    if (board%search%quit_requested) &
+      call fail_msg("one-node exhaustion unexpectedly requested quit")
 
     !! recursive interruption
     call set_fen(board, fen)
@@ -131,9 +129,8 @@ contains
     budget = max(2_int64, visit_count/2_int64)
     board%request = SearchRequestT()
     board%request%node_limit = budget
-    call init_searching(board%request, board%state%turn == WHITE, &
-                        board%searching)
-    board%searching%poll_input = .false. ! <-- non-interactive for test
+    call init_search(board%request, board%state%turn == WHITE, board%search)
+    board%search%poll_input = .false. ! <-- non-interactive for test
 
     call save_checkpoint(board, checkpoint)
 
@@ -144,15 +141,15 @@ contains
     call check_checkpoint(board, checkpoint)
 
     ! verify after search
-    if (board%searching%node_count /= budget) &
-      call fail("recursive interrupt exact node budget not reached")
-    if (.not. board%searching%is_stopped) &
-      call fail("recursive interrupt node exhaustion did not set stop flag")
-    if (board%searching%quit_requested) &
-    call fail("recursive interrupt node exhaustion unexpectedly requested quit")
+    if (board%search%node_count /= budget) &
+      call fail_msg("recursive interrupt exact node budget not reached")
+    if (.not. board%search%is_stopped) &
+      call fail_msg("recursive interrupt node exhaustion did not set stop flag")
+    if (board%search%quit_requested) &
+call fail_msg("recursive interrupt node exhaustion unexpectedly requested quit")
 
-    call pass()
+    call pass_msg()
 
   end subroutine assert_search_request
 
-end program test_searching
+end program test_search_limits

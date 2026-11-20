@@ -17,7 +17,7 @@
 program test_move
 
   use, intrinsic :: iso_fortran_env, only: int8, int16, int64
-  use TestUtilsM, only: begin_suite, begin_test, pass, fail
+  use TestUtilsM, only: begin_suite, begin_test, pass_msg, fail_msg
   use BaseM
   use BoardM
   use EvaluationM
@@ -58,17 +58,17 @@ program test_move
 
   if (u_pri /= pri .or. u_f_sq /= f_sq .or. u_t_sq /= t_sq .or. &
       u_pc /= pc .or. u_cap /= cap .or. u_pro /= pro .or. u_mtype /= mtype) then
-    call fail("unpacked components do not match packed inputs")
+    call fail_msg("unpacked components do not match packed inputs")
   end if
 
   if (get_from_sq(imv) /= f_sq .or. get_to_sq(imv) /= t_sq .or. &
       get_piece(imv) /= pc .or. get_captured(imv) /= cap .or. &
       get_promotion(imv) /= pro .or. get_move_type(imv) /= mtype .or. &
       get_priority(imv) /= pri) then
-    call fail("getter functions returned incorrect values")
+    call fail_msg("getter functions returned incorrect values")
   end if
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! UCI Conversions
@@ -77,20 +77,22 @@ program test_move
 
  imv = pack_move(0_int16, SQ_E2, SQ_E4, WHITE + PAWN, EMPTY, EMPTY, DOUBLE_PUSH)
   uci_str = get_uci(imv)
-  if (trim(uci_str) /= "e2e4") call fail("get_uci expected e2e4")
+  if (trim(uci_str) /= "e2e4") call fail_msg("get_uci expected e2e4")
 
   parsed_imv = from_uci("e2e4")
   if (get_from_sq(parsed_imv) /= SQ_E2 .or. get_to_sq(parsed_imv) /= SQ_E4) then
-    call fail("from_uci failed to parse e2e4")
+    call fail_msg("from_uci failed to parse e2e4")
   end if
 
   imv = pack_move(0_int16, SQ_E7, SQ_E5, WHITE + PAWN, EMPTY, WHITE + QUEEN, PROMO_MOVE)
   uci_str = get_uci(imv)
-  if (trim(uci_str) /= "e7e5q") call fail("get_uci expected promotion string e7e5q")
+  if (trim(uci_str) /= "e7e5q") &
+    call fail_msg("get_uci expected promotion string e7e5q")
 
-  if (get_uci(null_move()) /= "0000") call fail("null move UCI string /= 0000")
+  if (get_uci(null_move()) /= "0000") &
+    call fail_msg("null move UCI string /= 0000")
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! MVV / LVA Move Ordering Scores
@@ -111,10 +113,10 @@ program test_move
   score_quiet = get_mvv_lva(mv_quiet)
 
   if (score_quiet /= 0 .or. score_ptq <= score_qtp) then
-    call fail("MVV/LVA priorities calculated out of order")
+    call fail_msg("MVV/LVA priorities calculated out of order")
   end if
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Board Manipulation (move_pieces & unmove_pieces)
@@ -130,29 +132,34 @@ program test_move
   call move_pieces(board, imv)
 
   if (piece_at(board, SQ_E4) /= WHITE + PAWN .or. piece_at(board, SQ_E2) /= EMPTY) then
-    call fail("piece placement after move_pieces invalid")
+    call fail_msg("piece placement after move_pieces invalid")
   end if
 
   call unmove_pieces(board, imv)
 
   if (piece_at(board, SQ_E2) /= WHITE + PAWN .or. piece_at(board, SQ_E4) /= EMPTY) then
-    call fail("piece placement after unmove_pieces invalid")
+    call fail_msg("piece placement after unmove_pieces invalid")
   end if
 
-if (base_fen(board) /= initial_fen) call fail("board FEN mismatch after unmove")
+  if (base_fen(board) /= initial_fen) &
+    call fail_msg("board FEN mismatch after unmove")
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Retroactive Score Negation / Distance Inversion
   ! -------------------------------------------------------------------
   call begin_test("retro_score evaluation propagation")
 
-  if (retro_score(150_EVK) /= -150_EVK) call fail("retro_score simple score negation failed")
-  if (retro_score(ILLEGAL) /= ILLEGAL) call fail("retro_score ILLEGAL handling failed")
-  if (retro_score(MATE) /= -MATE + 1_EVK) call fail("retro_score MATE distance increment failed")
-  if (retro_score(MATED) /= -MATED - 1_EVK) call fail("retro_score MATED distance increment failed")
+  if (retro_score(150_EVK) /= -150_EVK) &
+    call fail_msg("retro_score simple score negation failed")
+  if (retro_score(ILLEGAL) /= ILLEGAL) &
+    call fail_msg("retro_score ILLEGAL handling failed")
+  if (retro_score(MATE) /= -MATE + 1_EVK) &
+    call fail_msg("retro_score MATE distance increment failed")
+  if (retro_score(MATED) /= -MATED - 1_EVK) &
+    call fail_msg("retro_score MATED distance increment failed")
 
-  call pass()
+  call pass_msg()
 
 end program test_move

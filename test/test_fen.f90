@@ -16,7 +16,7 @@
 !-
 program test_fen
 
-  use TestUtilsM, only: begin_suite, begin_test, pass, fail
+  use TestUtilsM, only: begin_suite, begin_test, pass_msg, fail_msg
   use BoardM, only: BoardT, get_board, reset_board, set_fen, get_fen
   implicit none
 
@@ -45,9 +45,9 @@ program test_fen
 
     if (original_fen /= get_fen(board)) then
       print *, "get_fen:", get_fen(board)
-      call fail("Mismatch on FEN: "//trim(original_fen))
+      call fail_msg("Mismatch on FEN: "//trim(original_fen))
     end if
   end do
-  call pass("All FEN round-trips matched perfectly")
+  call pass_msg("All FEN round-trips matched perfectly")
 
 end program test_fen

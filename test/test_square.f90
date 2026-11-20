@@ -16,7 +16,7 @@
 !-
 program test_square
 
-  use TestUtilsM, only: begin_suite, begin_test, pass, fail
+  use TestUtilsM, only: begin_suite, begin_test, pass_msg, fail_msg
   use SquareM
   use PieceM, only: WHITE, BLACK
   implicit none
@@ -33,27 +33,27 @@ program test_square
   do sq = 0, SQUARE_MASK
     file = SQUARE_FILE(sq)
     if (parse_file(FILE_CHAR(sq)) /= file) then
-      call fail("file character parsing round-trip mismatch")
+      call fail_msg("file character parsing round-trip mismatch")
     end if
   end do
-  call pass()
+  call pass_msg()
 
   call begin_test("parse_rank(RANK_CHAR(sq)) == rank")
   do sq = 0, SQUARE_MASK
     rank = RANK_OFFSET(sq)
     if (parse_rank(RANK_CHAR(sq)) /= rank) then
-      call fail("rank character parsing round-trip mismatch")
+      call fail_msg("rank character parsing round-trip mismatch")
     end if
   end do
-  call pass()
+  call pass_msg()
 
   call begin_test("parse_square(SQUARE_NAME(sq)) == sq")
   do sq = 0, SQUARE_MASK
     if (parse_square(SQUARE_NAME(sq)) /= sq) then
-      call fail("square string parsing round-trip mismatch")
+      call fail_msg("square string parsing round-trip mismatch")
     end if
   end do
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Parsing Invalid Inputs & Rank Digit Checks
@@ -63,16 +63,16 @@ program test_square
   if (parse_square("z9") /= SQ_NONE .or. &
       parse_file("x") /= SQ_NONE .or. &
       parse_rank("9") /= SQ_NONE) then
-    call fail("invalid square/file/rank input did not return SQ_NONE")
+    call fail_msg("invalid square/file/rank input did not return SQ_NONE")
   end if
-  call pass()
+  call pass_msg()
 
   call begin_test("is_rank_digit logic")
   if (.not. is_rank_digit('1') .or. .not. is_rank_digit('8') .or. &
       is_rank_digit('0') .or. is_rank_digit('9') .or. is_rank_digit('a')) then
-    call fail("is_rank_digit classification failed")
+    call fail_msg("is_rank_digit classification failed")
   end if
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Board Mirror & Distance Metrics
@@ -81,27 +81,27 @@ program test_square
   call begin_test("MIRROR flips ranks correctly")
   if (MIRROR(SQ_A1) /= SQ_A8 .or. MIRROR(SQ_E2) /= SQ_E7 .or. &
       MIRROR(SQ_H8) /= SQ_H1) then
-    call fail("square rank mirroring mismatch")
+    call fail_msg("square rank mirroring mismatch")
   end if
-  call pass()
+  call pass_msg()
 
   call begin_test("square_distance king steps")
   if (square_distance(SQ_A1, SQ_H8) /= 7_SQK .or. &
       square_distance(SQ_E4, SQ_E5) /= 1_SQK .or. &
       square_distance(SQ_E4, SQ_F5) /= 1_SQK .or. &
       square_distance(SQ_E4, SQ_E4) /= 0_SQK) then
-    call fail("chebyshev distance calculation mismatch")
+    call fail_msg("chebyshev distance calculation mismatch")
   end if
-  call pass()
+  call pass_msg()
 
   call begin_test("square_manhattan_distance rook steps")
   if (square_manhattan_distance(SQ_A1, SQ_H8) /= 14_SQK .or. &
       square_manhattan_distance(SQ_E4, SQ_E5) /= 1_SQK .or. &
       square_manhattan_distance(SQ_E4, SQ_F5) /= 2_SQK .or. &
       square_manhattan_distance(SQ_E4, SQ_E4) /= 0_SQK) then
-    call fail("manhattan distance calculation mismatch")
+    call fail_msg("manhattan distance calculation mismatch")
   end if
-  call pass()
+  call pass_msg()
 
   call begin_test("square_knight_distance step checks")
   if (square_knight_distance(SQ_E4, SQ_F4) /= 3_SQK .or. &
@@ -109,9 +109,9 @@ program test_square
       square_knight_distance(SQ_E4, SQ_G6) /= 4_SQK .or. &
       square_knight_distance(SQ_E4, SQ_G5) /= 1_SQK .or. &
       square_knight_distance(SQ_E4, SQ_E4) /= 0_SQK) then
-    call fail("knight distance calculation mismatch")
+    call fail_msg("knight distance calculation mismatch")
   end if
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! 0x88 / 0o77 Board Transformations & Off-board Detection
@@ -121,24 +121,24 @@ program test_square
   do sq = 0, SQUARE_MASK
     zsq = OZ(sq)
     if (ZO(zsq) /= sq .or. .not. Z_IS_ON_BOARD(zsq)) then
-      call fail("0x88 square coordinate conversion round-trip failed")
+      call fail_msg("0x88 square coordinate conversion round-trip failed")
     end if
   end do
-  call pass()
+  call pass_msg()
 
   call begin_test("0x88 off-board detection")
   do sq = 0, SQUARE_MASK
     zsq = OZ(sq)
     if (iand(zsq, Z88) /= 0_SQK) then
-      call fail("valid square has off-board 0x88 bits set")
+      call fail_msg("valid square has off-board 0x88 bits set")
     end if
     if (SQUARE_FILE(sq) == FILE_H) then
       if (iand(zsq + ZE, Z88) == 0_SQK .or. Z_IS_ON_BOARD(zsq + ZE)) then
-        call fail("off-board square east of file H was not detected")
+        call fail_msg("off-board square east of file H was not detected")
       end if
     end if
   end do
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Color-oriented Rank Arrays
@@ -147,8 +147,8 @@ program test_square
   call begin_test("IS_RANK_7_CO for WHITE and BLACK")
   if (.not. IS_RANK_7_CO(SQ_E7, WHITE) .or. IS_RANK_7_CO(SQ_E2, WHITE) .or. &
       .not. IS_RANK_7_CO(SQ_E2, BLACK) .or. IS_RANK_7_CO(SQ_E7, BLACK)) then
-    call fail("color-oriented 7th rank check mismatch")
+    call fail_msg("color-oriented 7th rank check mismatch")
   end if
-  call pass()
+  call pass_msg()
 
 end program test_square

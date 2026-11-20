@@ -17,7 +17,7 @@
 program test_evaluation
 
   use, intrinsic :: iso_fortran_env, only: int16
-  use TestUtilsM, only: begin_suite, begin_test, pass, fail
+  use TestUtilsM, only: begin_suite, begin_test, pass_msg, fail_msg
   use BaseM, only: BaseT, full_score
   use PieceM, only: WHITE, BLACK, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING
   use SquareM, only: SQ_E1, SQ_E8, SQ_D4
@@ -35,12 +35,12 @@ program test_evaluation
   call begin_test("evaluation constants and piece values")
 
   if (MATE /= 32000_EVK .or. MATED /= -32000_EVK .or. DRAW /= 0_EVK) then
-    call fail("special score constants mismatch")
+    call fail_msg("special score constants mismatch")
   end if
 
   if (PIECE_VALUE(WHITE + PAWN) /= 100_EVK .or. &
       PIECE_VALUE(BLACK + PAWN) /= -100_EVK) then
-    call fail("pawn value mismatch")
+    call fail_msg("pawn value mismatch")
   end if
 
   if (PIECE_VALUE(WHITE + KNIGHT) /= 320_EVK .or. &
@@ -51,10 +51,10 @@ program test_evaluation
       PIECE_VALUE(BLACK + ROOK) /= -500_EVK .or. &
       PIECE_VALUE(WHITE + QUEEN) /= 900_EVK .or. &
       PIECE_VALUE(BLACK + QUEEN) /= -900_EVK) then
-    call fail("piece value constants mismatch")
+    call fail_msg("piece value constants mismatch")
   end if
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Full Score Symmetry at Startpos
@@ -64,10 +64,11 @@ program test_evaluation
   call base%reset_base()
   call full_score(base, score, phase_opt=phase, score_mg_opt=score_mg)
 
-  if (phase /= 24_EVK) call fail("starting position phase /= 24")
-  if (score_mg /= 0_EVK .or. score /= 0_EVK) call fail("starting score not symmetric")
+  if (phase /= 24_EVK) call fail_msg("starting position phase /= 24")
+  if (score_mg /= 0_EVK .or. score /= 0_EVK) &
+    call fail_msg("starting score not symmetric")
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Material Imbalance Evaluation
@@ -81,10 +82,11 @@ program test_evaluation
 
   call full_score(base, score, phase_opt=phase, score_mg_opt=score_mg)
 
-  if (phase /= 1_EVK) call fail("single knight phase /= 1")
-  if (score_mg <= 0_EVK .or. score <= 0_EVK) call fail("white advantage not detected")
+  if (phase /= 1_EVK) call fail_msg("single knight phase /= 1")
+  if (score_mg <= 0_EVK .or. score <= 0_EVK) &
+    call fail_msg("white advantage not detected")
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Game Phase & Endgame Interpolation
@@ -97,9 +99,9 @@ program test_evaluation
 
   call full_score(base, score, phase_opt=phase, score_mg_opt=score_mg)
 
-  if (phase /= 0_EVK) call fail("bare kings phase /= 0")
-  if (score /= 0_EVK) call fail("bare kings evaluation not equal to 0")
+  if (phase /= 0_EVK) call fail_msg("bare kings phase /= 0")
+  if (score /= 0_EVK) call fail_msg("bare kings evaluation not equal to 0")
 
-  call pass()
+  call pass_msg()
 
 end program test_evaluation

@@ -35,8 +35,8 @@ module TestUtilsM
     begin_suite, &
     begin_test, &
     check_checkpoint, &
-    fail, &
-    pass, &
+    fail_msg, &
+    pass_msg, &
     save_checkpoint, &
     PositionCheckpointT
 
@@ -87,7 +87,7 @@ contains
   !-----------------------------------------------------------------------------
   ! Pass current test
   !-----------------------------------------------------------------------------
-  subroutine pass(msg_opt)
+  subroutine pass_msg(msg_opt)
     character(len=*), intent(in), optional :: msg_opt
 
     if (present(msg_opt)) then
@@ -98,18 +98,18 @@ contains
         trim(current_suite)//": "//trim(current_test)
     end if
     current_test = "no active test!"
-  end subroutine pass
+  end subroutine pass_msg
 
   !-----------------------------------------------------------------------------
   ! Fail current test with custom message and stop execution
   !-----------------------------------------------------------------------------
-  subroutine fail(msg)
+  subroutine fail_msg(msg)
     character(len=*), intent(in) :: msg
     write (error_unit, '(A,A,A,A,A,A)') RED//"  [FAIL] "//RESET, &
       trim(current_suite)//": "// &
       trim(current_test)//" - ", trim(msg)
     error stop 1
-  end subroutine fail
+  end subroutine fail_msg
 
   subroutine assert_perft(ref_name, ref_fen, ref_depth, ref_nodes, &
                           breakdown_opt)
@@ -136,7 +136,7 @@ contains
     call board%set_fen( &
       "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
     if (.not. board%verify_hash()) &
-      call fail("Hash verification failed on initial setup!")
+      call fail_msg("Hash verification failed on initial setup!")
 #endif
 
     call set_fen(board, ref_fen)
@@ -149,12 +149,12 @@ contains
       print '(a, i0)', "go perft ", ref_depth
     end if
 
-    call system_clock(board%searching%start_tick, &
-                      board%searching%clock_ticks_per_second)
+    call system_clock(board%search%start_tick, &
+                      board%search%clock_ticks_per_second)
     call reset_movestack(board%stack)
     call perft(board, ref_depth, total_nodes, do_breakdown)
 
-    ms = elapsed_time_ms(board%searching)
+    ms = elapsed_time_ms(board%search)
 
     knps = real(total_nodes, real64)/max(ms, 0.1_real64)
 
@@ -165,11 +165,11 @@ contains
     if (total_nodes == ref_nodes) then
       write (unit=verdict_txt, fmt='(A,G0.3,A)') &
         " | ", (knps/1000_real64), " Mnps"
-      call pass(trim(stats_txt)//trim(verdict_txt))
+      call pass_msg(trim(stats_txt)//trim(verdict_txt))
     else
       write (unit=verdict_txt, fmt='(A,I0,A)') &
         " | Diff: ", total_nodes - ref_nodes, " nodes"
-      call fail(trim(stats_txt)//trim(verdict_txt))
+      call fail_msg(trim(stats_txt)//trim(verdict_txt))
     end if
   end subroutine assert_perft
 
@@ -200,43 +200,44 @@ contains
     integer :: i, nmoves, p
 
     if (.not. allocated(checkpoint%moves)) then
-      call fail("checkpoint has not been captured")
+      call fail_msg("checkpoint has not been captured")
     end if
     nmoves = size(checkpoint%moves)
 
     ! compare nmoves, fen, score, and hash before-after restoration
     if (checkpoint%nmoves /= nmoves) then
-      call fail("move count changed from checkpoint:"//to_str(nmoves))
+      call fail_msg("move count changed from checkpoint:"//to_str(nmoves))
     elseif (checkpoint%fen /= get_fen(board)) then
-      call fail("%fen changed from checkpoint:"//get_fen(board))
+      call fail_msg("%fen changed from checkpoint:"//get_fen(board))
     elseif (checkpoint%score /= board%score) then
-      call fail("%score changed from checkpoint:"//to_str(board%score))
+      call fail_msg("%score changed from checkpoint:"//to_str(board%score))
     elseif (checkpoint%score_mg /= board%score_mg) then
-      call fail("%score_mg changed from checkpoint:"//to_str(board%score_mg))
+      call fail_msg("%score_mg changed from checkpoint:"// &
+                    to_str(board%score_mg))
     elseif (checkpoint%phase /= board%phase) then
-      call fail("%phase changed from checkpoint:"//to_str(board%phase))
+      call fail_msg("%phase changed from checkpoint:"//to_str(board%phase))
     elseif (checkpoint%h /= board%state%h) then
-      call fail("%state%h changed from checkpoint:"//to_hex(board%state%h))
+      call fail_msg("%state%h changed from checkpoint:"//to_hex(board%state%h))
     end if
 
     ! compare ply, nmoves, moves before-after restoration
     p = checkpoint%p
 
     if (p /= board%stack%current_ply) then
-      call fail("board%stack%current_ply changed from checkpoint:"// &
-                to_str(board%stack%current_ply))
+      call fail_msg("board%stack%current_ply changed from checkpoint:"// &
+                    to_str(board%stack%current_ply))
     elseif (nmoves /= board%stack%ixn(p) - board%stack%ix1(p) + 1) then
-      call fail("ixn-ix1+1, changed from checkpoint:"// &
-                to_str(board%stack%ixn(p) - board%stack%ix1(p) + 1))
+      call fail_msg("ixn-ix1+1, changed from checkpoint:"// &
+                    to_str(board%stack%ixn(p) - board%stack%ix1(p) + 1))
     end if
     do i = 1, nmoves
       if (count(checkpoint%moves(i) == board%stack%move_list( &
                 board%stack%ix1(p):board%stack%ixn(p))) /= 1) then
-        call fail("root legal moves do not occur exactly once")
+        call fail_msg("root legal moves do not occur exactly once")
       end if
     end do
     if (.not. board%verify_hash()) then
-      call fail("restored hash differs from computation")
+      call fail_msg("restored hash differs from computation")
     end if
   end subroutine check_checkpoint
 

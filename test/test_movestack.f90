@@ -16,7 +16,7 @@
 !-
 program test_movestack
 
-  use TestUtilsM, only: begin_suite, begin_test, pass, fail
+  use TestUtilsM, only: begin_suite, begin_test, pass_msg, fail_msg
   use MoveStackM
   implicit none
 
@@ -35,10 +35,10 @@ program test_movestack
   if (stack%current_ply /= 1 .or. &
       count_moves(stack) /= 0 .or. &
       stack%free /= 1) then
-    call fail("initial movestack pointer or ply state invalid")
+    call fail_msg("initial movestack pointer or ply state invalid")
   end if
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Move Insertion and Retrieval
@@ -49,15 +49,16 @@ program test_movestack
   call push_move(stack, 200_MVK)
   call push_move(stack, 300_MVK)
 
-  if (count_moves(stack) /= 3) call fail("move count mismatch after pushing 3 moves")
+  if (count_moves(stack) /= 3) &
+    call fail_msg("move count mismatch after pushing 3 moves")
 
   if (get_move(stack, 1) /= 100_MVK .or. &
       get_move(stack, 2) /= 200_MVK .or. &
       get_move(stack, 3) /= 300_MVK) then
-    call fail("inserted move value mismatch")
+    call fail_msg("inserted move value mismatch")
   end if
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Ply Navigation (next_ply / prev_ply)
@@ -76,7 +77,7 @@ program test_movestack
   call next_ply(stack)
 
   if (stack%current_ply /= 2 .or. count_moves(stack) /= 0) then
-    call fail("ply increment failed or ply 2 is not empty")
+    call fail_msg("ply increment failed or ply 2 is not empty")
   end if
 
   call push_move(stack, 21_MVK)
@@ -84,21 +85,21 @@ program test_movestack
   call push_move(stack, 23_MVK)
 
   if (count_moves(stack) /= 3 .or. get_move(stack, 1) /= 21_MVK) then
-    call fail("ply 2 move stack corrupted")
+    call fail_msg("ply 2 move stack corrupted")
   end if
 
   ! Pop back to Ply 1
   call prev_ply(stack)
 
   if (stack%current_ply /= 1 .or. count_moves(stack) /= 2) then
-    call fail("ply decrement failed or ply 1 count changed")
+    call fail_msg("ply decrement failed or ply 1 count changed")
   end if
 
   if (get_move(stack, 1) /= 11_MVK .or. get_move(stack, 2) /= 12_MVK) then
-    call fail("ply 1 move contents corrupted after returning from ply 2")
+    call fail_msg("ply 1 move contents corrupted after returning from ply 2")
   end if
 
-  call pass()
+  call pass_msg()
 
   ! -------------------------------------------------------------------
   ! Move Sorting Priority
@@ -116,9 +117,9 @@ program test_movestack
   call sort_best(stack)
 
   if (get_move(stack, 1) /= 500_MVK) then
-    call fail("highest priority move not placed at top after sort_best")
+    call fail_msg("highest priority move not placed at top after sort_best")
   end if
 
-  call pass()
+  call pass_msg()
 
 end program test_movestack

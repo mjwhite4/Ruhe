@@ -18,7 +18,7 @@ program test_position
 
   use, intrinsic :: iso_fortran_env, only: int64
   use EvaluationM, only: EVK, DRAW, MATE
-  use TestUtilsM, only: begin_suite, begin_test, pass, fail
+  use TestUtilsM, only: begin_suite, begin_test, pass_msg, fail_msg
   implicit none
 
   call begin_suite("test_position")
@@ -124,19 +124,19 @@ contains
         write (unit=message_txt, fmt='(a,i0,a,i0)') &
           " nmoves:", nmoves, &
           " ref_nmoves:", ref_nmoves
-        call fail(trim(message_txt))
+        call fail_msg(trim(message_txt))
       end if
     end if
 
     ! position with no moves is either checkmate or stalemate, so test it
     if (nmoves == 0) then
       if (ref_score == -MATE .and. &
-          .not. board%is_check()) call fail("checkmate, expected check")
+          .not. board%is_check()) call fail_msg("checkmate, expected check")
 
       if (ref_score == DRAW .and. &
-          board%is_check()) call fail("stalemate, expected no check")
+          board%is_check()) call fail_msg("stalemate, expected no check")
 
-      call pass()
+      call pass_msg()
       return
     end if
 
@@ -148,7 +148,7 @@ contains
         token = trim(adjustl(token))
         if (token == "") exit
         if (.not. count(token == get_uci(moves)) == 1) then
-          call fail("ref_bm:"//trim(token)//" not found once")
+          call fail_msg("ref_bm:"//trim(token)//" not found once")
         end if
       end do
     end if
@@ -159,7 +159,7 @@ contains
       end associate
     end if
 
-    call pass()
+    call pass_msg()
 
   end subroutine assert_position
 

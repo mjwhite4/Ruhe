@@ -14,7 +14,7 @@
 ! You should have received a copy of the GNU General Public License
 ! along with this program.  If not, see <https://www.gnu.org/licenses/>.
 !-
-! @bief manage searching
+! @bief manage search
 module SearchM
 
   use, intrinsic :: iso_fortran_env, only: &
@@ -54,7 +54,7 @@ contains
 
     use, intrinsic :: iso_fortran_env, only: int64, error_unit
     use BoardM, only: BoardT, generate_legal_moves
-    use ClockM, only: elapsed_time_ms, init_searching, should_stop
+    use ClockM, only: elapsed_time_ms, init_search, should_stop
     use EvaluationM, only: EVK, DRAW, MATE
     use MoveM, only: MVK, get_uci
     use PieceM, only: WHITE
@@ -70,7 +70,7 @@ contains
     logical :: is_wtm
 
     is_wtm = (board%state%turn == WHITE)
-    call init_searching(board%request, is_wtm, board%searching)
+    call init_search(board%request, is_wtm, board%search)
     call generate_legal_moves(board, nmoves)
 
     search_out = SearchResultT()
@@ -97,11 +97,11 @@ contains
     depth = 1
 
     do
-      if (should_stop(board%searching)) exit
+      if (should_stop(board%search)) exit
 
       call alphabeta(board, depth, 0, -MATE, MATE, move, score, nnodes)
 
-      if (board%searching%is_stopped) exit ! Discard incomplete iteration.
+      if (board%search%is_stopped) exit ! Discard incomplete iteration.
 
       search_out%depth = depth
       search_out%move = move
@@ -111,15 +111,15 @@ contains
 
       ! progress report; score/PV reporting separately
       write (output_unit, '(a,i0,a,i0,a,i0,a,a)') &
-        "info depth ", depth, " nodes ", board%searching%node_count, &
-        " time ", elapsed_time_ms(board%searching), &
+        "info depth ", depth, " nodes ", board%search%node_count, &
+        " time ", elapsed_time_ms(board%search), &
         " pv ", trim(get_uci(move))
       flush (output_unit)
 
       if (.not. board%request%infinite) then
         if (depth >= board%request%depth_limit) exit
-        if (elapsed_time_ms(board%searching) >= &
-            board%searching%soft_ms) exit
+        if (elapsed_time_ms(board%search) >= &
+            board%search%soft_ms) exit
       end if
 
       depth = depth + 1
@@ -131,7 +131,7 @@ contains
   !! The caller supplies the same root position and depth as alphabeta.
   !! ply is distance from the search root (normally zero initially), not
   !! the move stack index. nnodes_opt returns visited nodes, including leaves.
-  !! This routine does not initialize or modify board%searching.
+  !! This routine does not initialize or modify board%search.
   recursive subroutine negamax( &
     board, depth, ply, best_move, score, nnodes_opt)
 
@@ -250,9 +250,9 @@ contains
     nnodes = 1
 
     ! when should_stop becomes true, immediately unwind
-    if (should_stop(board%searching)) return
+    if (should_stop(board%search)) return
 
-    board%searching%node_count = board%searching%node_count + 1_int64
+    board%search%node_count = board%search%node_count + 1_int64
 
     ! repetition, fifty-move rule, insufficient material
     if (is_draw(board)) return
@@ -309,7 +309,7 @@ contains
       mv = board%stack%move_list(ix)
 
       ! when should_stop become true, immediately unwind
-      if (should_stop(board%searching)) return
+      if (should_stop(board%search)) return
 
       ! swap best mv to top TODO right here??
       ! call sort_best(board%stack)
@@ -360,7 +360,7 @@ contains
 #endif
 
       ! if stopped, val is unusable
-      if (board%searching%is_stopped) return
+      if (board%search%is_stopped) return
 
       ! negate val perspective, if val is better than score, keep bm, ce
       if (-val > score) then

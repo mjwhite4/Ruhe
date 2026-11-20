@@ -16,7 +16,7 @@
 !-
 program test_ttable
   use, intrinsic :: iso_fortran_env, only: int8, int16
-  use TestUtilsM, only: begin_suite, begin_test, pass, fail
+  use TestUtilsM, only: begin_suite, begin_test, pass_msg, fail_msg
   use TTableM, only: &
     reset_ttable, probe_ttable, store_ttable, EntryT, TT, TT_MASK, TT_EXACT
   use ZobristM, only: ZHK
@@ -43,12 +43,12 @@ contains
     ! Initialize table with 2^4 = 16 entries
     call reset_ttable(4, ok)
 
-    if (.not. ok) call fail("Failed to allocate transposition table")
-    if (.not. allocated(TT)) call fail("TT array is not allocated")
-    if (size(TT) /= 16) call fail("TT size is not equal to 16")
-    if (TT_MASK /= 15_ZHK) call fail("TT_MASK mask calculation mismatch")
+    if (.not. ok) call fail_msg("Failed to allocate transposition table")
+    if (.not. allocated(TT)) call fail_msg("TT array is not allocated")
+    if (size(TT) /= 16) call fail_msg("TT size is not equal to 16")
+    if (TT_MASK /= 15_ZHK) call fail_msg("TT_MASK mask calculation mismatch")
 
-    call pass()
+    call pass_msg()
   end subroutine test_reset_and_allocation
 
   !-----------------------------------------------------------------------------
@@ -66,7 +66,7 @@ contains
     ! Probe non-existent hash key
     hash_key = 123456789_ZHK
     call probe_ttable(hash_key, result_item, found)
-    if (found) call fail("Found entry before storing")
+    if (found) call fail_msg("Found entry before storing")
 
     ! Prepare entry to store
     item%hash = hash_key
@@ -80,12 +80,12 @@ contains
 
     ! Probe existing key
     call probe_ttable(hash_key, result_item, found)
-    if (.not. found) call fail("Stored entry was not found")
-    if (result_item%score /= 150_EVK) call fail("Stored score mismatch")
-    if (result_item%depth /= 4_int8) call fail("Stored depth mismatch")
-    if (result_item%flag /= TT_EXACT) call fail("Stored flag mismatch")
+    if (.not. found) call fail_msg("Stored entry was not found")
+    if (result_item%score /= 150_EVK) call fail_msg("Stored score mismatch")
+    if (result_item%depth /= 4_int8) call fail_msg("Stored depth mismatch")
+    if (result_item%flag /= TT_EXACT) call fail_msg("Stored flag mismatch")
 
-    call pass()
+    call pass_msg()
   end subroutine test_store_and_probe_hit_miss
 
   !-----------------------------------------------------------------------------
@@ -121,10 +121,11 @@ contains
     call store_ttable(hash2, e2)
 
     call probe_ttable(hash2, res, found)
-    if (.not. found) call fail("Deeper entry failed to replace shallower entry")
-    if (res%score /= 200_EVK) call fail("Deeper entry score mismatch")
+    if (.not. found) call fail_msg( &
+      "Deeper entry failed to replace shallower entry")
+    if (res%score /= 200_EVK) call fail_msg("Deeper entry score mismatch")
 
-    call pass()
+    call pass_msg()
   end subroutine test_replacement_policy
 
 end program test_ttable

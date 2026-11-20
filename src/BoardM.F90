@@ -70,7 +70,7 @@ module BoardM
     integer(MVK), dimension(MAX_GAME_PLY) :: move_sequence ! possible moves
     integer :: game_ply
     type(SearchRequestT) :: request
-    type(SearchStateT) :: searching
+    type(SearchStateT) :: search
   contains
 
     ! state, FEN, and utility methods
