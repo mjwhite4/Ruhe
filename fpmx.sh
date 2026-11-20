@@ -8,7 +8,8 @@
 #   ./fpmx.sh clean
 set -eo pipefail
 
-FPM="fpm"
+# On NixOS, to work past Ruby fpm, put this line into your ~/.bashrc: "export FPM=fortran-fpm"
+FPM="${FPM:-fpm}"
 
 PROJECT_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 cd -- "$PROJECT_ROOT"
@@ -55,22 +56,22 @@ fi
 case "$ACTION" in
   clean)
     echo "[fpmx] Cleaning fpm build and local binaries..."
-    $FPM clean
+    "$FPM" clean
     rm -f -- ./ruhe ./ruhe-debug ./ruhe-*
     exit 0
     ;;
   test)
     echo "[fpmx] Running tests ($PROFILE profile)..."
-    $FPM test --profile "$PROFILE" "$@"
+    "$FPM" test --profile "$PROFILE" "$@"
     ;;
   build)
     echo "[fpmx] Building and publishing $LOCAL_EXECUTABLE ($PROFILE profile)..."
-    $FPM run ruhe --profile "$PROFILE" --runner cp -- "$LOCAL_EXECUTABLE"
+    "$FPM" run ruhe --profile "$PROFILE" --runner cp -- "$LOCAL_EXECUTABLE"
     echo "[fpmx] Successfully updated $LOCAL_EXECUTABLE"
     ;;
   run)
     # Ensure it's built/published first, then execute with args
-    $FPM run ruhe --profile "$PROFILE" --runner cp -- "$LOCAL_EXECUTABLE"
+    "$FPM" run ruhe --profile "$PROFILE" --runner cp -- "$LOCAL_EXECUTABLE"
     exec "$LOCAL_EXECUTABLE" "$@"
     ;;
   *)
