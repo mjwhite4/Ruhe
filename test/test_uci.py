@@ -167,6 +167,13 @@ def test_fragmented_command(engine_path, **options):
         engine.expect('readyok')
 
 
+def test_crlf_input(engine_path, **options):
+    with Engine(engine_path, **options) as engine:
+        engine.write('uci\r\nisready\r\n')
+        engine.expect('uciok')
+        engine.expect('readyok')
+
+
 def test_position_and_search(engine_path, **options):
     with Engine(engine_path, **options) as engine:
         engine.handshake()
@@ -196,7 +203,7 @@ def main():
     if not os.path.isfile(path) or not os.access(path, os.X_OK):
         parser.error(f'engine is missing or not executable: {path}')
     failures = 0
-    tests = (test_basic_handshake, test_batched_commands,
+    tests = (test_basic_handshake, test_batched_commands, test_crlf_input,
              test_fragmented_command, test_position_and_search)
     for test in tests:
         try:

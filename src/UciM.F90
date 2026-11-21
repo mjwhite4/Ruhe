@@ -300,7 +300,6 @@ contains
           flush (output_unit)
 
         case ("quit", "q", "exit", "end", "bye") !! @brief quit
-          write (error_unit, "(a)") "quit!"
           quit_requested = .true.
 
         case default
