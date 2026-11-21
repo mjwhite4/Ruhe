@@ -121,8 +121,8 @@ contains
     end if
 
     ! save the sequences up to the moment
-    allocate(save_state_sequence(ref_ply -1))
-    allocate(save_move_sequence(ref_ply -1))
+    allocate (save_state_sequence(ref_ply - 1))
+    allocate (save_move_sequence(ref_ply - 1))
     save_state_sequence(1:ref_ply - 1) = &
       board%state_sequence(1:ref_ply - 1)
     save_move_sequence(1:ref_ply - 1) = &
@@ -247,6 +247,19 @@ contains
     end do
 
     call pass_msg()
+
+    ! assert that repetition depends on history, not current FEN
+    if (expect_repetition) then
+      call begin_test("FEN-only position correctly shows no repetition")
+      call board%reset_board()
+      call set_fen(board, ref_fen)
+      call generate_legal_moves(board, nmoves)
+
+      if (board%is_threefold_repetition()) then
+        call fail_msg("FEN-only position incorrectly detected repetition")
+      end if
+      call pass_msg()
+    end if
 
   end subroutine assert_moves_and_search
 
