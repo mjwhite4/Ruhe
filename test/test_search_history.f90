@@ -24,32 +24,45 @@ program test_search_history
 
   call assert_moves_and_search( &
     "position startpos moves e2e4 e7e5", &
-    "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2")
+    "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2", &
+    expect_repetition=.false.)
 
   call assert_moves_and_search( &
     "position startpos moves b1c3 g8f6", &
-    "rnbqkb1r/pppppppp/5n2/8/8/2N5/PPPPPPPP/R1BQKBNR w KQkq - 2 2")
+    "rnbqkb1r/pppppppp/5n2/8/8/2N5/PPPPPPPP/R1BQKBNR w KQkq - 2 2", &
+    expect_repetition=.false.)
+
+  call assert_moves_and_search( &
+    "position startpos moves g1f3 g8f6 f3g1 f6g8", &
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 4 3", &
+    expect_repetition=.false.)
+
+  call assert_moves_and_search( &
+    "position startpos moves g1f3 g8f6 f3g1 f6g8 g1f3 g8f6 f3g1 f6g8", &
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 8 5", &
+    expect_repetition=.true.)
 
 contains
 
-  subroutine assert_moves_and_search(cmd_str, ref_fen)
+  subroutine assert_moves_and_search(cmd_str, ref_fen, expect_repetition)
 
     use BoardM, only: &
       BoardT, get_board, get_fen, set_fen, generate_legal_moves, &
-      make_move, parse_uci, STARTING_FEN
+      is_threefold_repetition, make_move, parse_uci, STARTING_FEN
     use ClockM, only: SearchRequestT, init_search
-    use EvaluationM, only: MATE
+    use EvaluationM, only: DRAW, MATE
     use MoveM, only: MVK, get_uci
     use PieceM, only: WHITE
     use SearchM, only: alphabeta, negamax, SearchResultT
     use StateM, only: StateT, equal_state
     use StringUtilsM, only: next_token, to_str
     use TestUtilsM, only: &
-      begin_suite, begin_test, fail_msg, check_checkpoint, &
-      pass_msg, PositionCheckpointT, save_checkpoint
+      begin_suite, begin_test, check_checkpoint, fail_msg, pass_msg, &
+      PositionCheckpointT, save_checkpoint
     implicit none
 
     character(len=*), intent(in) :: cmd_str, ref_fen
+    logical, intent(in) :: expect_repetition
 
     type(BoardT), pointer :: board
     integer :: depth, ipos, nmoves, ref_ply
@@ -58,8 +71,8 @@ contains
     character(len=512) :: message_txt
     type(SearchResultT) :: alphabeta_out, negamax_out
     type(PositionCheckpointT) :: checkpoint
-    type(StateT), dimension(1:10) :: save_state_sequence
-    integer(MVK), dimension(1:10) :: save_move_sequence
+    type(StateT), dimension(:), allocatable :: save_state_sequence
+    integer(MVK), dimension(:), allocatable :: save_move_sequence
 
     call begin_test(cmd_str)
 
@@ -101,10 +114,6 @@ contains
       call make_move(board, mv)
       call generate_legal_moves(board, nmoves)
       ref_ply = ref_ply + 1
-
-      ! print *, "ref_ply=", ref_ply
-      ! print *, "board%stack%ix1(ref_ply)=", board%stack%ix1(ref_ply)
-      ! print *, "board%stack%ixn(ref_ply)=", board%stack%ixn(ref_ply)
     end do
 
     if (board%stack%current_ply /= ref_ply) then
@@ -112,6 +121,8 @@ contains
     end if
 
     ! save the sequences up to the moment
+    allocate(save_state_sequence(ref_ply -1))
+    allocate(save_move_sequence(ref_ply -1))
     save_state_sequence(1:ref_ply - 1) = &
       board%state_sequence(1:ref_ply - 1)
     save_move_sequence(1:ref_ply - 1) = &
@@ -126,6 +137,10 @@ contains
     end if
 
     call save_checkpoint(board, checkpoint)
+
+    ! assert the repetition detector before searching, false after four plies, true after eight
+    if (board%is_threefold_repetition() .neqv. expect_repetition) &
+      call fail_msg("is_threefold_repetition does not match expect_repetition")
 
     message_txt = ""
     do depth = 1, 3
@@ -143,29 +158,36 @@ contains
       call check_checkpoint(board, checkpoint)
 
       if (board%search%is_stopped) then
-        call fail_msg("alphabeta stopped before completing the test")
+        call fail_msg("alphabeta: stopped before completing the test")
       end if
 
-      ! after both moves, assert that setup actually retained two moves
+      ! after search, assert that root ply was retained
       if (board%stack%current_ply /= ref_ply) then
-        call fail_msg("setup did not retain moves 1")
+        call fail_msg("alphabeta: setup did not retain moves 1")
       end if
 
       ! after moves and search, assert that state_sequence remained
       if (.not. all(equal_state( &
                     save_state_sequence(1:ref_ply - 1), &
                     board%state_sequence(1:ref_ply - 1)))) then
-        call fail_msg("setup did not retain board%state_sequence")
+        call fail_msg("alphabeta: setup did not retain board%state_sequence")
       end if
 
       ! after moves and search assert that move_sequence remained
       if (any(save_move_sequence(1:ref_ply - 1) /= &
               board%move_sequence(1:ref_ply - 1))) then
-        call fail_msg("setup did not retain move_sequence")
+        call fail_msg("alphabeta: setup did not retain move_sequence")
       end if
 
-      ! ensure null move for terminal position
-      if (nmoves == 0) then
+      if (expect_repetition) then
+        ! assert DRAW
+        if (alphabeta_out%score /= DRAW) &
+          call fail_msg("alphabeta: expected repetition draw")
+        ! assert null-move for repetition
+        if (alphabeta_out%move /= 0_MVK) &
+          call fail_msg("alphabeta: expected null move on early draw return")
+      elseif (nmoves == 0) then
+        ! ensure null move for terminal position
         if (alphabeta_out%move /= 0_MVK) then
           call fail_msg("alphabeta: expected null move for terminal position")
         end if
@@ -188,7 +210,7 @@ contains
         call fail_msg(trim(message_txt))
       end if
 
-      ! after both moves, assert that setup actually retained ply
+      ! after search, assert that root ply was retained
       if (board%stack%current_ply /= ref_ply) then
         call fail_msg("setup did not retain moves 2")
       end if
@@ -197,17 +219,24 @@ contains
       if (.not. all(equal_state( &
                     save_state_sequence(1:ref_ply - 1), &
                     board%state_sequence(1:ref_ply - 1)))) then
-        call fail_msg("setup did not retain board%state_sequence")
+        call fail_msg("negamax: setup did not retain board%state_sequence")
       end if
 
       ! after moves and search assert that move_sequence remained
       if (any(save_move_sequence(1:ref_ply - 1) /= &
               board%move_sequence(1:ref_ply - 1))) then
-        call fail_msg("setup did not retain move_sequence")
+        call fail_msg("negamax: setup did not retain move_sequence")
       end if
 
-      ! ensure null move for terminal position
-      if (nmoves == 0) then
+      if (expect_repetition) then
+        ! assert DRAW
+        if (negamax_out%score /= DRAW) &
+          call fail_msg("negamax: expected repetition draw")
+        ! assert null-move for repetition
+        if (negamax_out%move /= 0_MVK) &
+          call fail_msg("negamax: expected null move on early draw return")
+      elseif (nmoves == 0) then
+        ! ensure null move for terminal position
         if (negamax_out%move /= 0_MVK) then
           call fail_msg("negamax: expected null move for terminal position")
         end if
