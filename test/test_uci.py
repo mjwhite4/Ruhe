@@ -1,193 +1,214 @@
 #!/usr/bin/env python3
+"""Cumulative UCI smoke tests; standard library only (Linux and macOS).
 
+Usage: python3 test/test_uci.py ./ruhe-debug [--verbose] [--timeout 10]
+Each case owns a fresh process. Search move legality remains the responsibility
+of the internal tests and the separate integration suite.
+"""
+import argparse
 import os
-import subprocess
-import time
-import sys
-import select
-
+from pathlib import Path
 import queue
+import re
+import subprocess
+import sys
 import threading
+import time
 
+GREEN = "\033[32m"
+RED = "\033[31m"
+RESET = "\033[0m"
 
-def test_uci_engine(engine_path):
+class Engine:
+    def __init__(self, path, timeout=10.0, verbose=False):
+        self.timeout = timeout
+        self.verbose = verbose
+        self.responses = queue.Queue()
+        self.lines = []
+        self.expected = []
+        env = os.environ.copy()
+        env['GFORTRAN_UNBUFFERED_PRECONNECTED'] = 'y'
+        self.process = subprocess.Popen(
+            [path], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=None, text=True, encoding='utf-8', errors='replace',
+            bufsize=1, env=env)
+        self.reader = threading.Thread(target=self._read, daemon=True)
+        self.reader.start()
 
-    env = os.environ.copy()
-    env["GFORTRAN_UNBUFFERED_PRECONNECTED"] = "y"
+    def _read(self):
+        try:
+            for line in self.process.stdout:
+                line = line.rstrip('\r\n')
+                self.lines.append(line)
+                self.responses.put(line)
+        finally:
+            self.responses.put(None)
 
-    # Launch engine process with unbuffered I/O
-    process = subprocess.Popen(
-        [engine_path],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=None,
-        text=True,
-        bufsize=1,
-        env=env
-    )
+    def __enter__(self):
+        return self
 
-    responses = queue.Queue()
-
-    def read_stdout(pipe, q):
-        for line in pipe:
-            q.put(line.rstrip("\r\n"))
-        q.put(None) # EOF
-
-
-    reader_thread = threading.Thread(
-        target=read_stdout,
-        args=(process.stdout, responses),
-        daemon=True
-    )
-    reader_thread.start()
-
-
-    def send_command(cmd, wait_time=0.1, timeout=1.0):
-        print(f"\n---> Sent: {cmd}")
-        process.stdin.write(f"{cmd}\n")
-        process.stdin.flush()
-
-        if cmd.strip() == "quit":
-            try:
-                status = process.wait(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                raise RuntimeError("Engine did not exit after quit")
-
-            reader_thread.join(timeout=1.0)
-
-            # Display and final output captured by the reader.
-            while True:
+    def __exit__(self, kind, value, traceback):
+        try:
+            if kind is None:
+                self.send('quit')
                 try:
-                    line = responses.get_nowait()
-                except queue.Empty:
-                    break
-                if line is not None:
-                    print(f"<--- Received: {line}")
-
-            if status != 0:
-                raise RuntimeError(
-                        f"Engine failed during shutdown: status {status}")
-
-            print("<--- Engine exited normally (status 0).")
-            return []
-        
-        # Give engine time to process
-        time.sleep(wait_time)
-        
-        # Silent commands produce no expected terminal output; return immediately
-        cmd_name = cmd.split()[0]
-        if cmd_name in ("ucinewgame", "position"):
-            # Drain any debug output currently sitting in the queue without blocking
-            lines = []
-            while not responses.empty():
+                    status = self.process.wait(timeout=self.timeout)
+                except subprocess.TimeoutExpired:
+                    raise RuntimeError('engine did not exit after quit')
+                self.reader.join(timeout=self.timeout)
+                if self.reader.is_alive():
+                    raise RuntimeError('stdout reader did not reach EOF')
+                if status != 0:
+                    raise RuntimeError(f'engine exited with status {status}')
+                actual = [line.strip() for line in self.lines
+                          if self._is_reply(line.strip())]
+                if actual != self.expected:
+                    raise RuntimeError(f'extra/missing protocol replies: expected '
+                                       f'{self.expected!r}, received {actual!r}')
+        finally:
+            if self.process.poll() is None:
+                self.process.terminate()
                 try:
-                    line = responses.get_nowait()
-                    if line:
-                        print(f"<--- Received: {line.strip()}")
-                        lines.append(line.strip())
-                except queue.Empty:
-                    break
-            return lines
+                    self.process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
+                    self.process.wait(timeout=2)
+            self.reader.join(timeout=2)
+            self.process.stdin.close()
+            if not self.reader.is_alive():
+                self.process.stdout.close()
+        return False
 
-        lines = []
-        start_time = time.time()
+    @staticmethod
+    def _is_reply(line):
+        return line in ('uciok', 'readyok') or line.split()[:1] == ['bestmove']
 
+    def write(self, text):
+        if self.verbose:
+            print(f'  --> {text!r}')
+        self.process.stdin.write(text)
+        self.process.stdin.flush()
+
+    def send(self, command):
+        self.write(command + '\n')
+
+    def expect(self, wanted, deadline=None):
+        if deadline is None:
+            deadline = time.monotonic() + self.timeout
         while True:
-            status = process.poll()
-            if status is not None:
-                raise RuntimeError(
-                        f"Engine exited unexpectedly while handling {cmd!r}: "
-                        f"status {status}"
-                        )
-
-            remaining = timeout - (time.time() - start_time)
+            remaining = deadline - time.monotonic()
             if remaining <= 0:
-                print("<--- <timeout>")
-                break
-
+                raise RuntimeError(f'timeout waiting for {wanted}')
             try:
-                line = responses.get(timeout=max(0.01, remaining))
+                line = self.responses.get(timeout=remaining)
             except queue.Empty:
-                print("<--- <timeout>")
-                break
-
+                raise RuntimeError(f'timeout waiting for {wanted}')
             if line is None:
-                print("<--- Engine closed stdout")
-                break
+                raise RuntimeError(f'EOF while waiting for {wanted}')
+            line = line.strip()
+            if self.verbose:
+                print(f'  <-- {line}')
+            if not self._is_reply(line):
+                continue  # Identification, info, and diagnostic lines.
+            matches = (line.startswith('bestmove ') if wanted == 'bestmove'
+                       else line == wanted)
+            if not matches:
+                raise RuntimeError(f'expected {wanted}, received {line!r}')
+            self.expected.append(line)
+            return line
 
-            cleaned = line.strip()
-            print(f"<--- Received: {cleaned}")
-            lines.append(cleaned)
-                
-            # Exit criteria for interactive UCI commands
-            if cmd == "uci" and cleaned == "uciok":
-                break
-            elif cmd == "isready" and cleaned == "readyok":
-                break
-            elif cmd_name == "go" and cleaned.startswith("bestmove "):
-                break
-            elif "done" in cleaned:
-                break
+    def handshake(self):
+        self.send('uci')
+        self.expect('uciok')
+        self.send('isready')
+        self.expect('readyok')
 
-        return lines
-
-
-    try:
-        # Send three commands together; require all replies in order.
-        print("---> Sent batch: uci / isready / isready")
-        process.stdin.write("uci\nisready\nisready\n")
-        process.stdin.flush()
-
-        expected = ["uciok", "readyok", "readyok"]
-        deadline = time.monotonic() + 3.0
-
-        for wanted in expected:
-            while True:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise RuntimeError(f"Batch timeout waiting for {wanted}")
-
-                try:
-                    line = responses.get(timeout=remaining)
-                except queue.Empty:
-                    raise RuntimeError(f"Batch timeout waiting for {wanted}")
-
-                if line is None:
-                    raise RuntimeError("Engine closed stdout during batch")
-
-                print(f"<--- Received: {line}")
-                if line in ("uciok", "readyok"):
-                    if line != wanted:
-                        raise RuntimeError(
-                            f"Expected {wanted}, received {line}"
-                        )
-                    break
-
-        print("[PASS] batched handshake replies received in order")
-
-        
-        # Silent game reset
-        send_command("ucinewgame", wait_time=0.1, timeout=0.3)
-        send_command("isready", wait_time=0.1, timeout=1.0)
-        
-        # Silent position setup
-        send_command("position startpos moves e2e4 e7e5", wait_time=0.1,
-                     timeout=0.5)
-        
-        # Calculation search
-        send_command("go depth 3", wait_time=0.1, timeout=10.0)
-        
-        # Shutdown
-        send_command("quit", wait_time=0.1, timeout=1.0)
-
-    finally:
-        if process.poll() is None:
-            process.terminate()
-            process.wait()
-
-if __name__ == "__main__":
-    path = sys.argv[1] if len(sys.argv) > 1 else "./ruhe"
-    test_uci_engine(path)
+    def no_reply(self, duration):
+        """Observe a bounded window before completing a fragmented command."""
+        deadline = time.monotonic() + duration
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            try:
+                line = self.responses.get(timeout=remaining)
+            except queue.Empty:
+                return
+            if line is None:
+                raise RuntimeError('EOF before fragmented command was completed')
+            if self.verbose:
+                print(f'  <-- {line}')
+            if self._is_reply(line.strip()):
+                raise RuntimeError(f'protocol reply before newline: {line!r}')
 
 
+def test_basic_handshake(engine_path, **options):
+    with Engine(engine_path, **options) as engine:
+        engine.handshake()
 
+
+def test_batched_commands(engine_path, **options):
+    with Engine(engine_path, **options) as engine:
+        engine.write('uci\nisready\nisready\n')
+        deadline = time.monotonic() + engine.timeout
+        for reply in ('uciok', 'readyok', 'readyok'):
+            engine.expect(reply, deadline)
+
+
+def test_fragmented_command(engine_path, **options):
+    with Engine(engine_path, **options) as engine:
+        engine.handshake()
+        engine.write('isrea')
+        engine.no_reply(0.2)
+        engine.write('dy\n')
+        engine.expect('readyok')
+        # Confirm continued operation after reconstructing the command.
+        engine.send('isready')
+        engine.expect('readyok')
+
+
+def test_position_and_search(engine_path, **options):
+    with Engine(engine_path, **options) as engine:
+        engine.handshake()
+        engine.send('ucinewgame')
+        engine.send('isready')
+        engine.expect('readyok')
+        engine.send('position startpos moves e2e4 e7e5')
+        engine.send('isready')
+        engine.expect('readyok')
+        engine.send('go depth 3')
+        reply = engine.expect('bestmove')
+        if not re.fullmatch(r'bestmove [a-h][1-8][a-h][1-8][qrbn]?'
+                            r'(?: ponder [a-h][1-8][a-h][1-8][qrbn]?)?', reply):
+            raise RuntimeError(f'invalid bestmove syntax for nonterminal root: {reply!r}')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('engine', nargs='?', default='./ruhe')
+    parser.add_argument('--timeout', type=float, default=10.0,
+                        help='response/shutdown timeout in seconds (default: 10)')
+    parser.add_argument('--verbose', action='store_true')
+    args = parser.parse_args()
+    if args.timeout <= 0:
+        parser.error('--timeout must be positive')
+    path = str(Path(args.engine).expanduser().resolve())
+    if not os.path.isfile(path) or not os.access(path, os.X_OK):
+        parser.error(f'engine is missing or not executable: {path}')
+    failures = 0
+    tests = (test_basic_handshake, test_batched_commands,
+             test_fragmented_command, test_position_and_search)
+    for test in tests:
+        try:
+            test(path, timeout=args.timeout, verbose=args.verbose)
+        except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+            failures += 1
+            print(f'{RED}[FAIL]{RESET} {test.__name__}: {exc}', flush=True)
+        else:
+            print(f'{GREEN}[PASS]{RESET} {test.__name__}', flush=True)
+    print(f'{len(tests) - failures}/{len(tests)} tests passed')
+    return 1 if failures else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
