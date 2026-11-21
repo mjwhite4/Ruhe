@@ -133,9 +133,38 @@ def test_uci_engine(engine_path):
 
 
     try:
-        # Handshake
-        send_command("uci", wait_time=0.1, timeout=1.0)
-        send_command("isready", wait_time=0.1, timeout=1.0)
+        # Send three commands together; require all replies in order.
+        print("---> Sent batch: uci / isready / isready")
+        process.stdin.write("uci\nisready\nisready\n")
+        process.stdin.flush()
+
+        expected = ["uciok", "readyok", "readyok"]
+        deadline = time.monotonic() + 3.0
+
+        for wanted in expected:
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError(f"Batch timeout waiting for {wanted}")
+
+                try:
+                    line = responses.get(timeout=remaining)
+                except queue.Empty:
+                    raise RuntimeError(f"Batch timeout waiting for {wanted}")
+
+                if line is None:
+                    raise RuntimeError("Engine closed stdout during batch")
+
+                print(f"<--- Received: {line}")
+                if line in ("uciok", "readyok"):
+                    if line != wanted:
+                        raise RuntimeError(
+                            f"Expected {wanted}, received {line}"
+                        )
+                    break
+
+        print("[PASS] batched handshake replies received in order")
+
         
         # Silent game reset
         send_command("ucinewgame", wait_time=0.1, timeout=0.3)
@@ -146,7 +175,7 @@ def test_uci_engine(engine_path):
                      timeout=0.5)
         
         # Calculation search
-        send_command("go depth 7", wait_time=0.5, timeout=5.0)
+        send_command("go depth 3", wait_time=0.1, timeout=10.0)
         
         # Shutdown
         send_command("quit", wait_time=0.1, timeout=1.0)
