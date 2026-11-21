@@ -35,6 +35,51 @@ class Engine:
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
 
+    def close_input_and_wait(self, allow_bestmove=False):
+        """Require clean exit within timeout after closing engine stdin."""
+        started = time.monotonic()
+        deadline = started + self.timeout
+
+        self.process.stdin.close()
+
+        try:
+            status = self.process.wait(
+                timeout=max(0.001, deadline - time.monotonic())
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("engine did not exit after stdin EOF")
+
+        self.reader.join(
+            timeout=max(0.0, deadline - time.monotonic())
+        )
+        if self.reader.is_alive():
+            raise RuntimeError("stdout did not close after stdin EOF")
+        if status != 0:
+            raise RuntimeError(f"EOF shutdown returned status {status}")
+
+        # All output is now collected. Preserve strict duplicate detection.
+        actual = [
+            line.strip() for line in self.lines
+            if self._is_reply(line.strip())
+        ]
+        if actual[:len(self.expected)] != self.expected:
+            raise RuntimeError("protocol reply mismatch before EOF")
+
+        extra = actual[len(self.expected):]
+        if extra:
+            if not allow_bestmove or len(extra) != 1:
+                raise RuntimeError(f"unexpected replies after EOF: {extra!r}")
+            if not re.fullmatch(
+                r"bestmove [a-h][1-8][a-h][1-8][qrbn]?"
+                r"(?: ponder [a-h][1-8][a-h][1-8][qrbn]?)?",
+                extra[0],
+            ):
+                raise RuntimeError(f"invalid final bestmove: {extra[0]!r}")
+            self.expected.extend(extra)
+
+        if self.verbose:
+            print(f"  EOF shutdown: {time.monotonic() - started:.3f}s")
+
     def _read(self):
         try:
             for line in self.process.stdout:
@@ -50,7 +95,10 @@ class Engine:
     def __exit__(self, kind, value, traceback):
         try:
             if kind is None:
-                self.send('quit')
+
+                # prevent sending quit after eof test closed stdin
+                if not self.process.stdin.closed:
+                    self.send('quit')
                 try:
                     status = self.process.wait(timeout=self.timeout)
                 except subprocess.TimeoutExpired:
@@ -174,6 +222,28 @@ def test_crlf_input(engine_path, **options):
         engine.expect('readyok')
 
 
+def test_eof_idle(engine_path, **options):
+    with Engine(engine_path, **options) as engine:
+        engine.handshake()
+        engine.close_input_and_wait()
+
+
+def test_eof_during_search(engine_path, **options):
+    with Engine(engine_path, **options) as engine:
+        engine.handshake()
+        engine.send("position startpos")
+
+        # go inifinite avoids the search completing naturally before eof.
+        engine.send("go infinite")
+
+        # readiness confirms that the engine is responding before close
+        engine.send("isready")
+        engine.expect("readyok")
+
+        # allow zero or one final best move satisfies shutdown or move reply
+        engine.close_input_and_wait(allow_bestmove=True)
+
+
 def test_position_and_search(engine_path, **options):
     with Engine(engine_path, **options) as engine:
         engine.handshake()
@@ -204,7 +274,8 @@ def main():
         parser.error(f'engine is missing or not executable: {path}')
     failures = 0
     tests = (test_basic_handshake, test_batched_commands, test_crlf_input,
-             test_fragmented_command, test_position_and_search)
+             test_eof_idle, test_eof_during_search, test_fragmented_command, 
+             test_position_and_search)
     for test in tests:
         try:
             test(path, timeout=args.timeout, verbose=args.verbose)
