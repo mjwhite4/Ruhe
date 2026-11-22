@@ -301,17 +301,17 @@ contains
   end function color_at
 
   !! @brief initialize the base
-  subroutine init_base(self, base_fen_option)
+  subroutine init_base(self, base_fen_opt)
 
     class(BaseT), intent(inout) :: self
-    character(len=100), intent(in), optional :: base_fen_option
+    character(len=100), intent(in), optional :: base_fen_opt
 
     character(len=100) :: t_fen
     integer :: status
 
     self%occupied_co = [BB_EMPTY, BB_EMPTY]
     t_fen = STARTING_BOARD_FEN
-    if (present(base_fen_option)) t_fen = base_fen_option
+    if (present(base_fen_opt)) t_fen = base_fen_opt
     if (t_fen == "") then
       call self%clear_base()
     else if (t_fen == STARTING_BOARD_FEN) then
@@ -592,7 +592,7 @@ contains
   end function pin_mask
 
   !! @brief emptying given sq, optionally returning pc
-  subroutine remove_piece_at(self, sq, pc)
+  subroutine remove_piece_at(self, sq, pc_opt)
 
     use PieceM, only: &
       EMPTY, WHITE, BLACK, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING
@@ -601,7 +601,7 @@ contains
 
     class(BaseT), intent(inout) :: self
     integer(SQK), intent(in) :: sq
-    integer(PCK), intent(out), optional :: pc
+    integer(PCK), intent(out), optional :: pc_opt
     integer(PCK) :: co, ty
     integer(BBK) :: bb
 
@@ -611,7 +611,7 @@ contains
     else if (iand(self%occupied_co(BLACK), bb) /= BB_EMPTY) then
       co = BLACK
     else
-      if (present(pc)) pc = EMPTY
+      if (present(pc_opt)) pc_opt = EMPTY
       return
     end if
     self%occupied_co(co) = ibclr(self%occupied_co(co), sq)
@@ -637,7 +637,7 @@ contains
     else
       error stop "Error: remove_piece_at sq EMPTY"
     end if
-    if (present(pc)) pc = ty + co
+    if (present(pc_opt)) pc_opt = ty + co
   end subroutine remove_piece_at
 
   !! @brief reset to the starting position

@@ -785,12 +785,12 @@ contains
   !! @brief t/f whether current position occurs target_count times
   !! @details scan state_sequence from the last irreversible move
   pure &
-    function is_repetition(self, nlimit) result(res_tf)
+    function is_repetition(self, nlimit_opt) result(res_tf)
 
     use StateM, only: StateT
 
     class(BoardT), intent(in) :: self
-    integer, intent(in), optional :: nlimit
+    integer, intent(in), optional :: nlimit_opt
     logical :: res_tf
 
     integer :: i, nlim, start_search_ply, nmatch
@@ -800,7 +800,7 @@ contains
 
     ! how high shall we count
     nlim = 3
-    if (present(nlimit)) nlim = nlimit
+    if (present(nlimit_opt)) nlim = nlimit_opt
 
     ! locate irreversable floor, guard against negative index
     start_search_ply = &
