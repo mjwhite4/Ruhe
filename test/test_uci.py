@@ -518,6 +518,64 @@ def test_input_overflow(engine_path, **options):
         raise RuntimeError(f"expected one overflow rejection, received {rejections}")
 
 
+def test_input_overflow_during_search(engine_path, **options):
+    """Discard a fragmented oversized line; retain its following command."""
+    diagnostic = "info string rejected command; input line too long"
+    with Engine(engine_path, **options) as engine:
+        engine.handshake()
+        engine.send("position startpos")
+        engine.send("go infinite")
+        engine.send("isready")
+        engine.expect("readyok")
+
+        # for rejections count
+        start = len(engine.lines)
+
+        # Current C buffer capacity is 8192 bytes. No newline yet.
+        engine.write_bounded("x" * 8192)
+        engine.expect_overflow()
+        # The first rejection proves discard mode started before this write.
+        engine.write_bounded("y" * 8192)
+
+        # finishes the discarded line with "quit\nisready\n" and requires "readyok"
+        engine.write_bounded("quit\nisready\n")
+
+        # quit belongs to the oversized line and MUST NOT execute.
+        engine.expect("readyok")
+
+        # rejecting premature bestmove ...
+        engine.no_reply(0.1)
+
+        # send stop and require one syntactically valid bestmove
+        engine.send("stop")
+        reply = engine.expect("bestmove")
+        if not re.fullmatch(
+            r"bestmove [a-h][1-8][a-h][1-8][qrbn]?"
+            r"(?: ponder [a-h][1-8][a-h][1-8][qrbn]?)?", reply
+        ):
+            raise RuntimeError(f"invalid bestmove after overflow: {reply!r}")
+
+        # run a fresh depth 3 search and check completion
+        search_start = len(engine.lines)
+        engine.send("go depth 3")
+        reply = engine.expect("bestmove")
+        if not re.fullmatch(
+            r"bestmove [a-h][1-8][a-h][1-8][qrbn]?"
+            r"(?: ponder [a-h][1-8][a-h][1-8][qrbn]?)?", reply
+        ):
+            raise RuntimeError(f"invalid bestmove after overflow: {reply!r}")
+
+
+        if not any(re.match(r"^info depth 3(?:\s|$)", line.strip())
+                   for line in engine.lines[search_start:]):
+            raise RuntimeError("search after overflow did not complete depth 3")
+
+    # Check after shutdown, when all stdout has been collected.
+    rejections = sum(line.strip() == diagnostic for line in engine.lines[start:])
+    if rejections != 1:
+        raise RuntimeError(f"expected one overflow rejection, received {rejections}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('engine', nargs='?', default='./ruhe')
@@ -535,7 +593,8 @@ def main():
              test_eof_idle, test_eof_during_search, test_fragmented_command,
              test_position_and_search, test_unknown_command_recovery,
              test_combined_search_limits, test_combined_limits_depth_first,
-             test_rejected_go_recovery, test_input_overflow)
+             test_rejected_go_recovery, test_input_overflow, 
+             test_input_overflow_during_search)
     for test in tests:
         try:
             test(path, timeout=args.timeout, verbose=args.verbose)
