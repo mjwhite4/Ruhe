@@ -325,6 +325,36 @@ def test_combined_search_limits(engine_path, **options):
             )
 
 
+def test_combined_limits_depth_first(engine_path, **options):
+    with Engine(engine_path, **options) as engine:
+        engine.handshake()
+        engine.send("position startpos")
+
+        start = len(engine.lines)
+        engine.send("go depth 2 nodes 1000000")
+        reply = engine.expect("bestmove")
+
+        if not re.fullmatch(
+            r"bestmove [a-h][1-8][a-h][1-8][qrbn]?"
+            r"(?: ponder [a-h][1-8][a-h][1-8][qrbn]?)?",
+            reply,
+        ):
+            raise RuntimeError(f"invalid bestmove: {reply!r}")
+
+        depths = []
+        for line in engine.lines[start:]:
+            match = re.match(
+                r"^info depth (\d+)(?:\s|$)", line.strip()
+            )
+            if match:
+                depths.append(int(match.group(1)))
+
+        if not depths or max(depths) != 2:
+            raise RuntimeError(
+                f"expected completed depth 2, received depths {depths!r}"
+            )
+
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -342,7 +372,7 @@ def main():
     tests = (test_basic_handshake, test_batched_commands, test_crlf_input,
              test_eof_idle, test_eof_during_search, test_fragmented_command,
              test_position_and_search, test_unknown_command_recovery,
-             test_combined_search_limits)
+             test_combined_search_limits, test_combined_limits_depth_first)
     for test in tests:
         try:
             test(path, timeout=args.timeout, verbose=args.verbose)
