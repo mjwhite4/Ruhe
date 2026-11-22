@@ -248,7 +248,7 @@ contains
           call set_search(board, command, status_opt=search_status)
           if (search_status /= 0) then
             write (output_unit, '(a,i0)') &
-              "infor string rejected go command; parser status=", search_status
+              "info string rejected go command; parser status=", search_status
             flush (output_unit)
             cycle
           end if

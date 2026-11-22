@@ -363,6 +363,10 @@ def test_rejected_go_recovery(engine_path, **options):
         for command in (
                 "go depth 20 nodes 0", 
                 "go ruhe_unknown_parameter",
+                "go depth", 
+                "go nodes", 
+                "go depth abc", 
+                "go nodes abc", 
                 ):
             engine.send(command)
             engine.send("isready")
