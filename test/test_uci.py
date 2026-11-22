@@ -576,6 +576,33 @@ def test_input_overflow_during_search(engine_path, **options):
         raise RuntimeError(f"expected one overflow rejection, received {rejections}")
 
 
+def test_eof_during_overflow(engine_path, **options):
+    """verify that absent NL cannot leave the reader stuck in discard mode"""
+
+    diagnostic = "info string rejected command; input line too long"
+
+    with Engine(engine_path, **options) as engine:
+        engine.handshake()
+        start = len(engine.lines)
+
+        # Enter discard mode without terminating the oversized line.
+        engine.write_bounded("x" * 8192)
+        engine.expect_overflow()
+        engine.write_bounded("unfinished tail")
+
+        # EOF must end discard mode and allow clean shutdown.
+        engine.close_input_and_wait()
+
+    rejections = sum(
+        line.strip() == diagnostic
+        for line in engine.lines[start:]
+    )
+    if rejections != 1:
+        raise RuntimeError(
+            f"expected one overflow rejection, received {rejections}"
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('engine', nargs='?', default='./ruhe')
@@ -594,7 +621,7 @@ def main():
              test_position_and_search, test_unknown_command_recovery,
              test_combined_search_limits, test_combined_limits_depth_first,
              test_rejected_go_recovery, test_input_overflow, 
-             test_input_overflow_during_search)
+             test_input_overflow_during_search, test_eof_during_overflow)
     for test in tests:
         try:
             test(path, timeout=args.timeout, verbose=args.verbose)
