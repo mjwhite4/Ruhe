@@ -297,6 +297,10 @@ def test_combined_search_limits(engine_path, **options):
         # A fresh search must clear the previous interruption and budget.
         engine.send("isready")
         engine.expect("readyok")
+
+        # record the output position
+        start = len(engine.lines)
+
         engine.send("go depth 3")
         reply = engine.expect("bestmove")
 
@@ -306,6 +310,20 @@ def test_combined_search_limits(engine_path, **options):
             reply,
         ):
             raise RuntimeError(f"invalid bestmove after limited search: {reply!r}")
+
+        # prove that depth 3 completes, by examining info depth outputs
+        completed_depths = []
+
+        for line in engine.lines[start:]:
+            match = re.match(r"^info depth (\d+)(?:\s|$)", line.strip())
+            if match:
+                completed_depths.append(int(match.group(1)))
+
+        if 3 not in completed_depths:
+            raise RuntimeError(
+                "search after node exhaustion did not report completed depth 3"
+            )
+
 
 
 def main():
