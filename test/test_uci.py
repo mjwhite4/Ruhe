@@ -259,6 +259,24 @@ def test_position_and_search(engine_path, **options):
                             r'(?: ponder [a-h][1-8][a-h][1-8][qrbn]?)?', reply):
             raise RuntimeError(f'invalid bestmove syntax for nonterminal root: {reply!r}')
 
+def test_unknown_command_recovery(engine_path, **options):
+    with Engine(engine_path, **options) as engine:
+        engine.handshake()
+
+        engine.send("ruhe_unknown_command")
+        engine.send("isready")
+        engine.expect("readyok")
+
+        engine.send("position startpos")
+        engine.send("go depth 3")
+        reply = engine.expect("bestmove")
+
+        if not re.fullmatch(
+            r"bestmove [a-h][1-8][a-h][1-8][qrbn]?"
+            r"(?: ponder [a-h][1-8][a-h][1-8][qrbn]?)?",
+            reply,
+        ):
+            raise RuntimeError(f"invalid bestmove after unknown command: {reply!r}")
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -275,7 +293,7 @@ def main():
     failures = 0
     tests = (test_basic_handshake, test_batched_commands, test_crlf_input,
              test_eof_idle, test_eof_during_search, test_fragmented_command, 
-             test_position_and_search)
+             test_position_and_search, test_unknown_command_recovery)
     for test in tests:
         try:
             test(path, timeout=args.timeout, verbose=args.verbose)
