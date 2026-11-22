@@ -359,9 +359,14 @@ def test_rejected_go_recovery(engine_path, **options):
     with Engine(engine_path, **options) as engine:
         engine.handshake()
         engine.send("position startpos")
-        engine.send("go depth 20 nodes 0")
-        engine.send("isready")
-        engine.expect("readyok")
+
+        for command in (
+                "go depth 20 nodes 0", 
+                "go ruhe_unknown_parameter",
+                ):
+            engine.send(command)
+            engine.send("isready")
+            engine.expect("readyok")
 
         # record the output position
         start = len(engine.lines)
@@ -374,7 +379,7 @@ def test_rejected_go_recovery(engine_path, **options):
             r"(?: ponder [a-h][1-8][a-h][1-8][qrbn]?)?",
             reply,
         ):
-            raise RuntimeError(f"invalid bestmove after limited search: {reply!r}")
+            raise RuntimeError(f"invalid bestmove after rejected go commands: {reply!r}")
 
         # prove that depth 3 completes, by examining info depth outputs
         completed_depths = []
@@ -386,7 +391,7 @@ def test_rejected_go_recovery(engine_path, **options):
 
         if 3 not in completed_depths:
             raise RuntimeError(
-                "search after node exhaustion did not report completed depth 3"
+                "search after rejected go commands did not report completed depth 3"
             )
 
 

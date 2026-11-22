@@ -570,9 +570,7 @@ contains
         end if
 
       case default
-        ! TODO ignore perft for now
-        error stop "set_search, unknown go:"//trim(cmd_str(ipos:))
-        call flush (output_unit)
+        status = 17 ! unsupported or unknown go parameter
 
       end select
 
