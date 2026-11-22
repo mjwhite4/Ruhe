@@ -166,9 +166,15 @@ contains
         ! controller closed stdin
         quit_requested = .true.
 
-      case (READ_IOS_ERROR, READ_OVERFLOW)
-        quit_requested = .true.
+      case (READ_OVERFLOW)
+        write (output_unit, '(a)') &
+          "info string rejected command; input line too long"
+        flush (output_unit)
+        cycle
+
+      case (READ_IOS_ERROR)
         input_failed = .true.
+        exit
 
       case (READ_COMPLETE_LINE)
         if (len_trim(command) == 0) cycle

@@ -206,10 +206,15 @@ contains
         search%quit_requested = .true.
         return
 
-      case (READ_IOS_ERROR, READ_OVERFLOW)
+      case (READ_OVERFLOW)
+        write (output_unit, '(a)') &
+          "info string rejected command; input line too long"
+        flush (output_unit)
+        cycle
+
+      case (READ_IOS_ERROR)
         search%is_stopped = .true.
         search%quit_requested = .true.
-        ! search%input_failed = .true.
         return
       end select
 

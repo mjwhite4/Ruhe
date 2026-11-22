@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import queue
 import re
+import select
 import subprocess
 import sys
 import threading
@@ -136,6 +137,59 @@ class Engine:
             print(f'  --> {text!r}')
         self.process.stdin.write(text)
         self.process.stdin.flush()
+
+    def write_bounded(self, text):
+        """Write ASCII test payloads with a deadline (POSIX pipes).
+
+        No other writer may use stdin concurrently. Existing writes are flushed.
+        Nonblocking os.write avoids a blocked Python writer during cleanup.
+        """
+        data = text.encode("ascii")
+        if self.verbose:
+            print(f"  --> bounded write: {len(data)} bytes")
+        fd = self.process.stdin.fileno()
+        was_blocking = os.get_blocking(fd)
+        deadline = time.monotonic() + self.timeout
+        offset = 0
+        os.set_blocking(fd, False)
+        try:
+            while offset < len(data):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError("timeout writing overflow test input")
+                try:
+                    _, writable, _ = select.select([], [fd], [], remaining)
+                    if not writable:
+                        raise RuntimeError("timeout writing overflow test input")
+                    count = os.write(fd, data[offset:offset + 4096])
+                except (BlockingIOError, InterruptedError):
+                    continue
+                if count == 0:
+                    raise RuntimeError("zero-byte write to engine stdin")
+                offset += count
+        finally:
+            os.set_blocking(fd, was_blocking)
+
+    def expect_overflow(self):
+        diagnostic = "info string rejected command; input line too long"
+        deadline = time.monotonic() + self.timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise RuntimeError("timeout waiting for overflow rejection")
+            try:
+                line = self.responses.get(timeout=remaining)
+            except queue.Empty:
+                raise RuntimeError("timeout waiting for overflow rejection")
+            if line is None:
+                raise RuntimeError("EOF while waiting for overflow rejection")
+            line = line.strip()
+            if self.verbose:
+                print(f"  <-- {line}")
+            if line == diagnostic:
+                return
+            if self._is_reply(line):
+                raise RuntimeError(f"expected overflow rejection, received {line!r}")
 
     def send(self, command):
         self.write(command + '\n')
@@ -428,6 +482,42 @@ def test_rejected_go_recovery(engine_path, **options):
             )
 
 
+def test_input_overflow(engine_path, **options):
+    """Discard a fragmented oversized line; retain its following command."""
+    diagnostic = "info string rejected command; input line too long"
+    with Engine(engine_path, **options) as engine:
+        engine.handshake()
+        engine.send("position startpos")
+        engine.send("isready")
+        engine.expect("readyok")
+        start = len(engine.lines)
+
+        # Current C buffer capacity is 8192 bytes. No newline yet.
+        engine.write_bounded("x" * 8192)
+        engine.expect_overflow()
+        # The first rejection proves discard mode started before this write.
+        engine.write_bounded("y" * 8192)
+        engine.write_bounded("quit\nisready\n")
+        # quit belongs to the oversized line and MUST NOT execute.
+        engine.expect("readyok")
+
+        search_start = len(engine.lines)
+        engine.send("go depth 3")
+        reply = engine.expect("bestmove")
+        if not re.fullmatch(
+            r"bestmove [a-h][1-8][a-h][1-8][qrbn]?"
+            r"(?: ponder [a-h][1-8][a-h][1-8][qrbn]?)?", reply
+        ):
+            raise RuntimeError(f"invalid bestmove after overflow: {reply!r}")
+        if not any(re.match(r"^info depth 3(?:\s|$)", line.strip())
+                   for line in engine.lines[search_start:]):
+            raise RuntimeError("search after overflow did not complete depth 3")
+    # Check after shutdown, when all stdout has been collected.
+    rejections = sum(line.strip() == diagnostic for line in engine.lines[start:])
+    if rejections != 1:
+        raise RuntimeError(f"expected one overflow rejection, received {rejections}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('engine', nargs='?', default='./ruhe')
@@ -445,7 +535,7 @@ def main():
              test_eof_idle, test_eof_during_search, test_fragmented_command,
              test_position_and_search, test_unknown_command_recovery,
              test_combined_search_limits, test_combined_limits_depth_first,
-             test_rejected_go_recovery)
+             test_rejected_go_recovery, test_input_overflow)
     for test in tests:
         try:
             test(path, timeout=args.timeout, verbose=args.verbose)

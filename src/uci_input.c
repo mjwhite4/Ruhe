@@ -10,6 +10,7 @@ static char buffer[CAPACITY];
 static size_t used = 0;
 static int eof_seen = 0;
 static int saved_flags = -1;
+static int discarding_line = 0;
 
 enum {
     READ_COMPLETE_LINE   =  1,
@@ -35,6 +36,7 @@ int uci_input_unit(void)
     saved_flags = flags;
     used = 0;
     eof_seen = 0;
+    discarding_line = 0;
     return READ_NO_LINE;
 }
 
@@ -69,6 +71,26 @@ int uci_input_next(char *out, int capacity, int *length)
     for (;;) {
         char *newline = memchr(buffer, '\n', used);
 
+        /* An oversized command was already reported. Discard its remainder,
+         * preserving any subsequent commands received in the same read.
+         */
+        if (discarding_line) {
+            if (newline != NULL) {
+                size_t consumed = (size_t)(newline - buffer) + 1;
+                memmove(buffer, buffer + consumed, used - consumed);
+                used -= consumed;
+                discarding_line = 0;
+                continue;
+            }
+
+            used = 0;
+
+            if (eof_seen) {
+                discarding_line = 0;
+                return READ_EOF;
+            }
+        }
+
         if (newline != NULL || (eof_seen && used > 0)) {
             size_t consumed = newline != NULL
                 ? (size_t)(newline - buffer) + 1
@@ -80,8 +102,13 @@ int uci_input_next(char *out, int capacity, int *length)
             if (n > 0 && buffer[n - 1] == '\r')
                 --n;
 
-            if (n > (size_t)capacity)
+            /* output capacity overflow check */
+            if (n > (size_t)capacity) {
+                /* The entire offending line is already buffered. */
+                memmove(buffer, buffer + consumed, used - consumed);
+                used -= consumed;
                 return READ_OVERFLOW;
+            }
 
             memcpy(out, buffer, n);
             memmove(buffer, buffer + consumed, used - consumed);
@@ -94,8 +121,14 @@ int uci_input_next(char *out, int capacity, int *length)
         if (eof_seen)
             return READ_EOF;
 
-        if (used == sizeof buffer)
+        /* full-buffer check */
+        if (used == sizeof buffer) {
+
+            /* No newline: report once, then discard through its terminator. */
+            used = 0;
+            discarding_line = 1;
             return READ_OVERFLOW;
+        }
 
         ssize_t n = read(STDIN_FILENO,
                          buffer + used,
