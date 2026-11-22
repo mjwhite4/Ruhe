@@ -165,6 +165,34 @@ class Engine:
             self.expected.append(line)
             return line
 
+    def expect_rejection(self):
+        deadline = time.monotonic() + self.timeout
+
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise RuntimeError("timeout waiting for go rejection")
+
+            try:
+                line = self.responses.get(timeout=remaining)
+            except queue.Empty:
+                raise RuntimeError("timeout waiting for go rejection")
+
+            if line is None:
+                raise RuntimeError("EOF while waiting for go rejection")
+
+            line = line.strip()
+            if self.verbose:
+                print(f"  <-- {line}")
+
+            if line.startswith("info string rejected go command;"):
+                return
+
+            if self._is_reply(line):
+                raise RuntimeError(
+                    f"expected go rejection before protocol reply: {line!r}"
+                )
+
     def handshake(self):
         self.send('uci')
         self.expect('uciok')
@@ -370,6 +398,7 @@ def test_rejected_go_recovery(engine_path, **options):
                 ):
             engine.send(command)
             engine.send("isready")
+            engine.expect_rejection()
             engine.expect("readyok")
 
         # record the output position
