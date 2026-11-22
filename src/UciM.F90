@@ -112,7 +112,7 @@ contains
 
     character(len=8192) :: command
     character(len=:), allocatable :: token
-    integer :: pos, nmoves
+    integer :: pos, nmoves, search_status
     integer(c_int) :: status
     logical :: input_failed, interactive, quit_requested
     type(BoardT), pointer :: board => null()
@@ -245,7 +245,13 @@ contains
           !! @brief search according to parameters and yield bestmove
 
           ! set_search
-          call set_search(board, command)
+          call set_search(board, command, status_opt=search_status)
+          if (search_status /= 0) then
+            write (output_unit, '(a,i0)') &
+              "infor string rejected go command; parser status=", search_status
+            flush (output_unit)
+            cycle
+          end if
 
           ! search
           call search_deeper(board, search_out)
@@ -557,7 +563,8 @@ contains
           status = 15
         else
           call to_int(token, bd%request%white_time_ms, status)
-          if (status /= 0) then
+          ! ensure that range checking happens after successful conversion
+          if (status == 0) then
             if (bd%request%white_time_ms < 1) status = 16
           end if
         end if
