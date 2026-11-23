@@ -20,6 +20,7 @@ module SearchM
   use, intrinsic :: iso_fortran_env, only: &
     int8, int16, int32, int64, output_unit
   use MoveM, only: MVK
+  use movestackM, only: MAX_PLY
   use EvaluationM, only: EVK
   implicit none
 
@@ -50,10 +51,10 @@ contains
   end subroutine init_search
 
   !! @brief iterative deepening from start, retain only completed results
-  subroutine search_deeper(board, search_out)
+  subroutine search_deeper(board, search_out, poll_input_opt)
 
     use, intrinsic :: iso_fortran_env, only: int64, error_unit
-    use BoardM, only: BoardT, generate_legal_moves
+    use BoardM, only: BoardT, generate_legal_moves, is_check
     use ClockM, only: elapsed_time_ms, init_search, should_stop
     use EvaluationM, only: EVK, DRAW, MATE
     use MoveM, only: MVK, get_uci
@@ -61,6 +62,8 @@ contains
 
     type(BoardT), intent(inout) :: board
     type(SearchResultT), intent(out) :: search_out
+    logical, intent(in), optional :: poll_input_opt
+
     integer :: nmoves
 
     integer :: depth, ix1, ply
@@ -71,6 +74,10 @@ contains
 
     is_wtm = (board%state%turn == WHITE)
     call init_search(board%request, is_wtm, board%search)
+    if (present(poll_input_opt)) then
+      board%search%poll_input = poll_input_opt
+    end if
+
     call generate_legal_moves(board, nmoves)
 
     search_out = SearchResultT()
@@ -78,6 +85,8 @@ contains
     if (nmoves == 0) then
       search_out%depth = 1
       search_out%move = 0_MVK
+      search_out%score = DRAW
+      if (is_check(board)) search_out%score = -MATE
       search_out%valid = .true.
       return
     end if
@@ -93,6 +102,9 @@ contains
     search_out%move = move
     search_out%nnodes = nnodes
     search_out%score = score
+
+    ! No room to explore a move; retain the legal fallback at depth zero.
+    if (board%stack%current_ply >= MAX_PLY) return
 
     depth = 1
 
@@ -117,9 +129,9 @@ contains
       flush (output_unit)
 
       if (.not. board%request%infinite) then
+        if (depth >= MAX_PLY - ply) exit
         if (depth >= board%request%depth_limit) exit
-        if (elapsed_time_ms(board%search) >= &
-            board%search%soft_ms) exit
+        if (elapsed_time_ms(board%search) >= board%search%soft_ms) exit
       end if
 
       depth = depth + 1
@@ -138,6 +150,7 @@ contains
     use, intrinsic :: iso_fortran_env, only: int64
     use BoardM, only: BoardT, generate_legal_moves, is_check, is_draw
     use EvaluationM, only: DRAW, MATE
+    use MoveStackM, only: MAX_PLY
     use PieceM, only: WHITE
 #ifdef DEBUG
     use MoveM, only: get_piece, get_from_sq
@@ -172,7 +185,7 @@ contains
     end if
 
     ! Static evaluation is expressed from the side-to-move perspective.
-    if (depth <= 0) then
+    if (depth <= 0 .or. board%stack%current_ply >= MAX_PLY) then
       score = board%score
       if (board%state%turn /= WHITE) score = -score
       return
@@ -226,7 +239,7 @@ contains
     use ClockM, only: should_stop
     use EvaluationM, only: EVK, DRAW, MATE
     use MoveM, only: MVK
-    use MoveStackM, only: sort_best
+    use MoveStackM, only: sort_best, MAX_PLY
     use PieceM, only: WHITE
 #ifdef DEBUG
     use MoveM, only: get_piece, get_from_sq, get_uci
@@ -295,7 +308,7 @@ contains
     end if
 
     ! leaf node positional score with side-to-move perspective
-    if (depth <= 0) then
+    if (depth <= 0 .or. board%stack%current_ply >= MAX_PLY) then
       score = board%score
       if (board%state%turn /= WHITE) score = -score
       return
