@@ -20,12 +20,13 @@ program test_evaluation
   use TestUtilsM, only: begin_suite, begin_test, pass_msg, fail_msg
   use BaseM, only: BaseT, full_score
   use PieceM, only: WHITE, BLACK, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING
-  use SquareM, only: SQ_E1, SQ_E8, SQ_D4
+  use SquareM, only: SQ_D5, SQ_E1, SQ_E8, SQ_D4
   use EvaluationM
   implicit none
 
   type(BaseT) :: base
   integer(kind=EVK) :: score, phase, score_mg
+  integer(kind=EVK) :: white_score, white_score_mg
 
   call begin_suite("test_evaluation")
 
@@ -85,6 +86,31 @@ program test_evaluation
   if (phase /= 1_EVK) call fail_msg("single knight phase /= 1")
   if (score_mg <= 0_EVK .or. score <= 0_EVK) &
     call fail_msg("white advantage not detected")
+
+  white_score = score
+  white_score_mg = score_mg
+
+  call pass_msg()
+
+
+  call begin_test("color-reflected knight evaluation")
+
+  call base%clear_base()
+  call base%set_piece_at(SQ_E1, WHITE + KING)
+  call base%set_piece_at(SQ_E8, BLACK + KING)
+  call base%set_piece_at(SQ_D5, BLACK + KNIGHT)
+
+  call full_score(base, score, phase_opt=phase, score_mg_opt=score_mg)
+
+  if (phase /= 1_EVK) then
+    call fail_msg("black knight phase /= 1")
+  end if
+  if (score /= -white_score) then
+    call fail_msg("color-reflected score did not change sign")
+  end if
+  if (score_mg /= -white_score_mg) then
+    call fail_msg("color-reflected score_mg did not change sign")
+  end if
 
   call pass_msg()
 
