@@ -30,6 +30,12 @@ for profile in debug release; do
 
     printf '\n=== Protocol tests: %s ===\n' "$profile"
     python3 test/test_uci.py "$executable"
+
+    printf '\n=== Infinite-search capacity tests: %s ===\n' "$profile"
+    ./fpmx.sh test "$profile" test_search_boundary \
+        --runner "python3 test/test_uci.py --boundary-fixture 0"
+    ./fpmx.sh test "$profile" test_search_preboundary \
+        --runner "python3 test/test_uci.py --boundary-fixture 1"
 done
 
 printf '\n%s[PASS]%s All build and test steps completed.\n' "$GREEN" "$RESET"
