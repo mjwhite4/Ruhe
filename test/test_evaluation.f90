@@ -174,6 +174,24 @@ program test_evaluation
     "black en passant evaluation caches", &
     "7k/8/8/8/3Pp3/8/8/7K b - d3 0 1", "e4d3")
 
+  !--- capture promotions
+
+  call assert_move_cache( &
+    "capture-promotion evaluation caches", &
+    "1r5k/P7/8/8/8/8/8/7K w - - 0 1", "a7b8q")
+
+  call assert_move_cache( &
+    "capture-underpromotion evaluation caches", &
+    "1r5k/P7/8/8/8/8/8/7K w - - 0 1", "a7b8n")
+
+  call assert_move_cache( &
+    "black capture-promotion evaluation caches", &
+    "7k/8/8/8/8/8/p7/1R5K b - - 0 1", "a2b1q")
+
+  call assert_move_cache( &
+    "black capture-underpromotion evaluation caches", &
+    "7k/8/8/8/8/8/p7/1R5K b - - 0 1", "a2b1n")
+
 
 contains
 
