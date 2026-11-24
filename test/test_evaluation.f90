@@ -130,7 +130,7 @@ program test_evaluation
 
   call pass_msg()
 
-  ! call test_capture_cache()
+  
 
   call assert_move_cache( &
     "capture evaluation caches", &
@@ -151,6 +151,28 @@ program test_evaluation
   call assert_move_cache( &
     "en passant evaluation caches", &
     "7k/8/8/3pP3/8/8/8/7K w - d6 0 1", "e5d6")
+
+  !--- special move evaluation cache and undo
+
+  call assert_move_cache( &
+    "black capture evaluation caches", &
+    "k2r4/8/8/8/3Q4/8/8/7K b - - 0 1", "d8d4")
+
+  call assert_move_cache( &
+    "black queen promotion evaluation caches", &
+    "7k/8/8/8/8/8/p7/7K b - - 0 1", "a2a1q")
+
+  call assert_move_cache( &
+    "black knight promotion evaluation caches", &
+    "7k/8/8/8/8/8/p7/7K b - - 0 1", "a2a1n")
+
+  call assert_move_cache( &
+    "black castling evaluation caches", &
+    "4k2r/8/8/8/8/8/8/4K3 b k - 0 1", "e8g8")
+
+  call assert_move_cache( &
+    "black en passant evaluation caches", &
+    "7k/8/8/8/3Pp3/8/8/7K b - d3 0 1", "e4d3")
 
 
 contains
