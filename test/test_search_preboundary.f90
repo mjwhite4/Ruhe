@@ -164,15 +164,36 @@ contains
     character(len=512) :: message_txt
     character(len=:), allocatable :: token
     type(SearchResultT) :: alphabeta_out, negamax_out, search_out
+    type(SearchResultT) :: alphabeta_ply1_out, negamax_ply1_out
     logical :: found
     type(PositionCheckpointT) :: checkpoint
-    integer(EVK) :: depth1_negamax_score, depth1_alphabeta_score
 
     call begin_test(test_name)
 
     board => get_board()
     call board%reset_board()
     call set_fen(board, fen)
+
+    call generate_legal_moves(board, nmoves)
+    call save_checkpoint(board, checkpoint)
+ 
+    ! run alphabeta and verify position restoration at ply=1, depth=1
+    alphabeta_ply1_out = SearchResultT()
+    board%request = SearchRequestT()
+    call init_search(board%request, board%state%turn == WHITE, board%search)
+    board%search%poll_input = .false.
+    call alphabeta(board, 1, 0, -MATE, MATE, &
+                   alphabeta_ply1_out%move, alphabeta_ply1_out%score, &
+                   alphabeta_ply1_out%nnodes)
+    call check_checkpoint(board, checkpoint)
+ 
+    ! run negamax and verify position restoration at ply=1, depth=1
+    negamax_ply1_out = SearchResultT()
+    call negamax(board, 1, 0, &
+                 negamax_ply1_out%move, negamax_ply1_out%score, &
+                 negamax_ply1_out%nnodes)
+    call check_checkpoint(board, checkpoint)
+
 
     do while (board%stack%current_ply < MAX_PLY - 1)
       call next_ply(board%stack)
@@ -197,6 +218,7 @@ contains
                       " ref_nmoves_opt:"//to_str(ref_nmoves_opt))
     end if
 
+    ! Establish a new baseline after intentionally relocating the stack.
     call save_checkpoint(board, checkpoint)
 
     do depth = 1, 3, 2
@@ -217,28 +239,27 @@ contains
           call fail_msg("alphabeta: expected null move for terminal root")
         end if
       else
-        if (.not. any(checkpoint%moves == alphabeta_out%move)) then
+        if (.not. any(alphabeta_out%move == checkpoint%moves)) then
           call fail_msg("alphabeta: returned move is not legal")
         end if
       end if
 
-      if (depth == 1) then
-        depth1_alphabeta_score = alphabeta_out%score
-      else if (depth == 3) then
-        if (depth1_alphabeta_score /= alphabeta_out%score) then
-          call fail_msg("alphabeta: depths 1 and 3 search scores mismatched at MAX_ply - 1")
-        end if
+      if (alphabeta_out%score /= alphabeta_ply1_out%score) then
+        call fail_msg("alphabeta: score differs from ordinary depth=1 reference")
       end if
 
       if (board%search%is_stopped) then
-        call fail_msg("alphabeta stopped before completing the test")
+        call fail_msg("alphabeta: stopped before completing the test")
       end if
 
-      if (alphabeta_out%nnodes /= 1 + nmoves) then
-        call fail_msg("alphabeta: expected root (1) plus legal children count")
+      if (alphabeta_out%nnodes /= alphabeta_ply1_out%nnodes) then
+        call fail_msg("alphabeta: nodes differ from ordinary depth=1 reference")
       end if
-      if (board%search%node_count /= alphabeta_out%nnodes) then
+      if (alphabeta_out%nnodes /= board%search%node_count) then
         call fail_msg("alphabeta: node counts disagree")
+      end if
+      if (alphabeta_out%nnodes /= 1 + nmoves) then
+        call fail_msg("alphabeta: node counts disagree with 1 + nmoves")
       end if
 
       negamax_out = SearchResultT()
@@ -251,17 +272,13 @@ contains
           call fail_msg("negamax: expected null move for terminal root")
         end if
       else
-        if (.not. any(checkpoint%moves == negamax_out%move)) then
+        if (.not. any(negamax_out%move == checkpoint%moves)) then
           call fail_msg("negamax: returned move is not legal")
         end if
       end if
 
-      if (depth == 1) then
-        depth1_negamax_score = negamax_out%score
-      else if (depth == 3) then
-        if (depth1_negamax_score /= negamax_out%score) then
-          call fail_msg("negamax: depths 1 and 3 search scores mismatched at MAX_ply - 1")
-        end if
+      if (negamax_out%score /= negamax_ply1_out%score) then
+        call fail_msg("negamax: score differs from ordinary depth=1 reference")
       end if
 
       ! compare search scores and ref_score_opt
@@ -279,9 +296,12 @@ contains
         end if
       end if
 
-      ! verify that search visted the root and legal children only
+      ! verify that search visited the root and legal children only
+      if (negamax_out%nnodes /= negamax_ply1_out%nnodes) then
+        call fail_msg("negamax: nodes differ from ordinary depth=1 reference")
+      end if
       if (negamax_out%nnodes /= 1 + nmoves) then
-        call fail_msg("negamax: expected root (1) plus legal children count")
+        call fail_msg("negamax: node counts disagree with 1 + nmoves")
       end if
 
       ! if searched move and not one of the ref_bm_opt are matched, fail
@@ -332,7 +352,7 @@ contains
        end if
     end if
 
-    ! compare search_deeperi score and negamax score, (effectively depth=1 for MAX_PLY - 1)
+    ! compare search_deeper score and negamax score, (effectively depth=1 for MAX_PLY - 1)
     if (search_out%score /= negamax_out%score) then
       write (unit=message_txt, fmt='(a,i0,a,i0)') &
         " search_deeper score:", search_out%score, &
