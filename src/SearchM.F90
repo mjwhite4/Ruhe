@@ -55,7 +55,7 @@ contains
 
     use, intrinsic :: iso_fortran_env, only: int64, error_unit
     use BoardM, only: BoardT, generate_legal_moves, is_check
-    use ClockM, only: elapsed_time_ms, init_search, should_stop
+    use ClockM, only: elapsed_time_ms, init_search, should_stop, wait_for_stop
     use EvaluationM, only: EVK, DRAW, MATE
     use MoveM, only: MVK, get_uci
     use PieceM, only: WHITE
@@ -104,7 +104,10 @@ contains
     search_out%score = score
 
     ! No room to explore a move; retain the legal fallback at depth zero.
-    if (board%stack%current_ply >= MAX_PLY) return
+    if (board%stack%current_ply >= MAX_PLY) then
+      if (board%request%infinite) call wait_for_stop(board%search)
+      return
+    end if
 
     depth = 1
 
@@ -128,8 +131,14 @@ contains
         " pv ", trim(get_uci(move))
       flush (output_unit)
 
+      ! Capacity is independent of the requested depth or infinite mode.
+      ! Preserve the completed result and keep servicing input until stopped.
+      if (depth >= MAX_PLY - ply) then
+        if (board%request%infinite) call wait_for_stop(board%search)
+        exit
+      end if
+
       if (.not. board%request%infinite) then
-        if (depth >= MAX_PLY - ply) exit
         if (depth >= board%request%depth_limit) exit
         if (elapsed_time_ms(board%search) >= board%search%soft_ms) exit
       end if

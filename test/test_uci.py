@@ -21,7 +21,7 @@ RED = "\033[31m"
 RESET = "\033[0m"
 
 class Engine:
-    def __init__(self, path, timeout=10.0, verbose=False):
+    def __init__(self, path, timeout=10.0, verbose=False, extra_args=()):
         self.timeout = timeout
         self.verbose = verbose
         self.responses = queue.Queue()
@@ -30,7 +30,7 @@ class Engine:
         env = os.environ.copy()
         env['GFORTRAN_UNBUFFERED_PRECONNECTED'] = 'y'
         self.process = subprocess.Popen(
-            [path], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            [path, *extra_args], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=None, text=True, encoding='utf-8', errors='replace',
             bufsize=1, env=env)
         self.reader = threading.Thread(target=self._read, daemon=True)
@@ -603,18 +603,101 @@ def test_eof_during_overflow(engine_path, **options):
         )
 
 
+def test_infinite_capacity_fixture(engine_path, expected_depth, **options):
+    """Control an opt-in Fortran fixture, using the ordinary Engine cleanup."""
+    with Engine(engine_path, extra_args=("--infinite-fixture",), **options) as engine:
+        def read_until(wanted):
+            deadline = time.monotonic() + engine.timeout
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError(f"timeout waiting for {wanted}")
+                try:
+                    line = engine.responses.get(timeout=remaining)
+                except queue.Empty:
+                    raise RuntimeError(f"timeout waiting for {wanted}")
+                if line is None:
+                    raise RuntimeError(f"EOF while waiting for {wanted}")
+                line = line.strip()
+                if engine.verbose:
+                    print(f"  <-- {line}")
+                if line == wanted:
+                    return
+                if line == "fixture_result":
+                    raise RuntimeError("fixture returned before stop")
+                if engine._is_reply(line):
+                    raise RuntimeError(f"unexpected protocol reply: {line!r}")
+
+        read_until("fixture_ready")
+        if expected_depth == 1:
+            # Wait for completed search before testing the capacity wait.
+            deadline = time.monotonic() + engine.timeout
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError("timeout waiting for completed depth 1")
+                try:
+                    line = engine.responses.get(timeout=remaining)
+                except queue.Empty:
+                    raise RuntimeError("timeout waiting for completed depth 1")
+                if line is None or line == "fixture_result":
+                    raise RuntimeError("fixture returned before depth 1 and stop")
+                if re.match(r"^info depth 1(?:\s|$)", line):
+                    break
+                if engine._is_reply(line.strip()):
+                    raise RuntimeError(f"unexpected reply: {line!r}")
+
+        engine.send("isready")
+        engine.expect("readyok")
+
+        # Require silence at capacity, including absence of new depth reports.
+        deadline = time.monotonic() + 0.2
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                line = engine.responses.get(timeout=remaining)
+            except queue.Empty:
+                break
+            raise RuntimeError(f"unexpected output while waiting at capacity: {line!r}")
+        if engine.process.poll() is not None:
+            raise RuntimeError("fixture exited before stop")
+
+        engine.send("stop")
+        read_until("fixture_result")
+        # Fixtures exit themselves; close stdin so __exit__ does not send quit.
+        engine.close_input_and_wait()
+        depths = [int(m.group(1)) for line in engine.lines
+                  if (m := re.match(r"^info depth (\d+)(?:\s|$)", line.strip()))]
+        expected = [1] if expected_depth == 1 else []
+        if depths != expected:
+            raise RuntimeError(f"expected depth reports {expected}, received {depths}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('engine', nargs='?', default='./ruhe')
     parser.add_argument('--timeout', type=float, default=10.0,
                         help='response/shutdown timeout in seconds (default: 10)')
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--boundary-fixture', type=int, choices=(0, 1),
+                        help='control a boundary test executable; expected completed depth')
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error('--timeout must be positive')
     path = str(Path(args.engine).expanduser().resolve())
     if not os.path.isfile(path) or not os.access(path, os.X_OK):
         parser.error(f'engine is missing or not executable: {path}')
+    if args.boundary_fixture is not None:
+        try:
+            test_infinite_capacity_fixture(
+                path, args.boundary_fixture, timeout=args.timeout, verbose=args.verbose)
+        except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+            print(f'{RED}[FAIL]{RESET} infinite capacity fixture: {exc}', flush=True)
+            return 1
+        print(f'{GREEN}[PASS]{RESET} infinite capacity fixture depth {args.boundary_fixture}')
+        return 0
     failures = 0
     tests = (test_basic_handshake, test_batched_commands, test_crlf_input,
              test_eof_idle, test_eof_during_search, test_fragmented_command,

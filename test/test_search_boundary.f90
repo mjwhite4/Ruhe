@@ -20,6 +20,14 @@ program test_search_boundary
   use TestUtilsM, only: begin_suite, begin_test, pass_msg, fail_msg
   implicit none
 
+  character(len=32) :: fixture_argument
+
+  call get_command_argument(1, fixture_argument)
+  if (trim(fixture_argument) == "--infinite-fixture") then
+    call run_infinite_fixture()
+    stop
+  end if
+
   call begin_suite("test_search_boundary")
 
 ! call assert_search( &
@@ -75,6 +83,62 @@ program test_search_boundary
 !   ref_nmoves_opt=26)
 
 contains
+
+  ! Opt-in child process controlled by test_uci.py; never waits in normal tests.
+  subroutine run_infinite_fixture()
+
+    use, intrinsic :: iso_c_binding, only: c_int
+    use, intrinsic :: iso_fortran_env, only: output_unit
+    use BoardM, only: BoardT, get_board, set_fen, generate_legal_moves
+    use ClockM, only: SearchRequestT
+    use MoveM, only: get_uci
+    use MoveStackM, only: MAX_PLY, next_ply
+    use NonBlockingM, only: uci_input_unit, uci_input_close
+    use SearchM, only: SearchResultT, search_deeper
+    use TestUtilsM, only: PositionCheckpointT, save_checkpoint, check_checkpoint
+
+    type(BoardT), pointer :: board
+    type(PositionCheckpointT) :: checkpoint
+    type(SearchResultT) :: result
+    integer(c_int) :: status
+    integer :: nmoves
+
+    call begin_suite("test_search_boundary")
+    call begin_test("infinite search waits at capacity")
+    board => get_board()
+    call board%reset_board()
+    call set_fen(board, "R6k/8/5K2/8/8/8/8/8 b - - 0 1")
+    do while (board%stack%current_ply < MAX_PLY - 0)
+      call next_ply(board%stack)
+    end do
+    call generate_legal_moves(board, nmoves)
+    if (nmoves /= 1) call fail_msg("fixture requires one legal root move")
+    call save_checkpoint(board, checkpoint)
+
+    status = uci_input_unit()
+    if (status /= 0_c_int) call fail_msg("input initialization failed")
+    board%request = SearchRequestT()
+    board%request%infinite = .true.
+    write (output_unit, '(a)') "fixture_ready"
+    flush (output_unit)
+    call search_deeper(board, result, poll_input_opt=.true.)
+    status = uci_input_close()
+    if (status /= 0_c_int) call fail_msg("input cleanup failed")
+
+    call check_checkpoint(board, checkpoint)
+    if (.not. any(checkpoint%moves == result%move)) &
+      call fail_msg("returned move is not legal at root")
+    if (get_uci(result%move) /= "h8h7") call fail_msg("wrong retained move")
+    if (result%depth /= 0) call fail_msg("wrong completed depth")
+    if (result%nnodes /= 0) call fail_msg("wrong retained iteration node count")
+    if (board%search%node_count /= 0) call fail_msg("nodes increased while waiting")
+    if (.not. board%search%is_stopped) call fail_msg("search did not record stop")
+    if (board%search%quit_requested) call fail_msg("stop requested engine shutdown")
+    write (output_unit, '(a)') "fixture_result"
+    flush (output_unit)
+    call pass_msg()
+  end subroutine run_infinite_fixture
+
 
   subroutine assert_search(test_name, fen, ref_nmoves_opt, ref_score_opt, ref_bm_opt)
 

@@ -29,7 +29,8 @@ module ClockM
     init_search, &
     limits_reached, &
     poll_search_commands, &
-    should_stop
+    should_stop, &
+    wait_for_stop
 
   ! requested search constraints for one search
   type, public :: SearchRequestT
@@ -244,6 +245,31 @@ contains
       end select
     end do
   end subroutine poll_search_commands
+
+  ! @brief retain a completed result while waiting for stop at stack capacity.
+  ! Polling continues to handle isready, stop, quit, EOF, and input errors.
+  subroutine wait_for_stop(search)
+
+    use, intrinsic :: iso_c_binding, only: c_int
+
+    type(SearchStateT), intent(inout) :: search
+    integer(c_int) :: sleep_status
+
+    interface
+      function c_usleep(microseconds) bind(C, name="usleep") result(status)
+        import :: c_int
+        integer(c_int), value :: microseconds
+        integer(c_int) :: status
+      end function c_usleep
+    end interface
+
+    do
+      if (should_stop(search)) exit
+      sleep_status = c_usleep(10000_c_int)
+      ! An interrupted sleep simply brings the next stop check forward.
+      if (sleep_status /= 0_c_int) cycle
+    end do
+  end subroutine wait_for_stop
 
   ! @brief shared stop test
   function should_stop(search) result(is_stopped)
