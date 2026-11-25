@@ -25,58 +25,58 @@ program test_search_correctness
   call assert_search( &
     test_name="mate in one", &
     fen="7k/8/5KQ1/8/8/8/8/8 w - - 0 1", &
-    ref_nmoves=23, &
-    ref_bm="g6g7", &
-    ref_score=MATE - 1_EVK)
+    ref_nmoves_opt=23, &
+    ref_bm_opt="g6g7", &
+    ref_score_opt=MATE - 1_EVK)
 
   call assert_search( &
     test_name="only one legal move", &
     fen="R6k/8/5K2/8/8/8/8/8 b - - 0 1", &
-    ref_nmoves=1, &
-    ref_bm="h8h7")
+    ref_nmoves_opt=1, &
+    ref_bm_opt="h8h7")
 
   call assert_search( &
     test_name="checkmate", &
     fen="7k/6Q1/5K2/8/8/8/8/8 b - - 0 1", &
-    ref_nmoves=0, &
-    ref_bm="0000", &
-    ref_score=-MATE)
+    ref_nmoves_opt=0, &
+    ref_bm_opt="0000", &
+    ref_score_opt=-MATE)
 
   call assert_search( &
     test_name="stalemate", &
     fen="7k/5Q2/6K1/8/8/8/8/8 b - - 0 1", &
-    ref_nmoves=0, &
-    ref_bm="0000", &
-    ref_score=DRAW)
+    ref_nmoves_opt=0, &
+    ref_bm_opt="0000", &
+    ref_score_opt=DRAW)
 
   call assert_search( &
     test_name="hanging queen", &
     fen="7k/8/8/3q4/8/8/8/K2R4 w - - 0 1", &
-    ref_nmoves=12)
+    ref_nmoves_opt=12)
 
   call assert_search( &
     test_name="promotion", &
     fen="7k/P7/8/8/8/8/8/7K w - - 0 1", &
-    ref_nmoves=7)
+    ref_nmoves_opt=7)
 
   call assert_search( &
     test_name="legal en passant", &
     fen="7k/8/8/3pP3/8/8/8/7K w - d6 0 1", &
-    ref_nmoves=5)
+    ref_nmoves_opt=5)
 
   call assert_search( &
     test_name="illegal en passant", &
     fen="8/8/8/8/k2pP2R/8/8/3K4 b - e3 0 1", &
-    ref_nmoves=6)
+    ref_nmoves_opt=6)
 
   call assert_search( &
     test_name="castling", &
     fen="r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", &
-    ref_nmoves=26)
+    ref_nmoves_opt=26)
 
 contains
 
-  subroutine assert_search(test_name, fen, ref_nmoves, ref_score, ref_bm)
+  subroutine assert_search(test_name, fen, ref_nmoves_opt, ref_score_opt, ref_bm_opt)
 
     use BoardM, only: BoardT, get_board, get_fen, set_fen, generate_legal_moves
     use ClockM, only: SearchRequestT, init_search
@@ -89,9 +89,9 @@ contains
       PositionCheckpointT, save_checkpoint, check_checkpoint
 
     character(len=*), intent(in) :: test_name, fen
-    integer, intent(in), optional :: ref_nmoves
-    integer(EVK), intent(in), optional :: ref_score
-    character(len=*), intent(in), optional :: ref_bm
+    integer, intent(in), optional :: ref_nmoves_opt
+    integer(EVK), intent(in), optional :: ref_score_opt
+    character(len=*), intent(in), optional :: ref_bm_opt
 
     type(BoardT), pointer :: board
     integer :: depth, ipos, nmoves
@@ -118,11 +118,11 @@ contains
 
     call save_checkpoint(board, checkpoint)
 
-    ! if search nmoves and ref_nmoves are mismatched, fail
-    if (present(ref_nmoves)) then
-      if (nmoves /= ref_nmoves) &
+    ! if search nmoves and ref_nmoves_opt are mismatched, fail
+    if (present(ref_nmoves_opt)) then
+      if (nmoves /= ref_nmoves_opt) &
         call fail_msg("nmoves:"//to_str(nmoves)// &
-                      " ref_nmoves:"//to_str(ref_nmoves))
+                      " ref_nmoves_opt:"//to_str(ref_nmoves_opt))
     end if
 
     do depth = 1, 3
@@ -136,17 +136,21 @@ contains
       call alphabeta(board, depth, 0, -MATE, MATE, &
                      alphabeta_out%move, alphabeta_out%score, &
                      alphabeta_out%nnodes)
+
+      ! ensure position restoration after search
       call check_checkpoint(board, checkpoint)
 
       if (board%search%is_stopped) then
         call fail_msg("alphabeta stopped before completing the test")
       end if
 
-      ! ensure null move for terminal position
+      ! ensure null move for terminal root position (without legal moves)
       if (nmoves == 0) then
         if (alphabeta_out%move /= 0_MVK) then
           call fail_msg("alphabeta: expected null move for terminal position")
         end if
+
+      ! check alphabeta move against saved root movelist
       else if (.not. any(checkpoint%moves == alphabeta_out%move)) then
         call fail_msg("alphabeta: returned move is not legal")
       end if
@@ -154,38 +158,43 @@ contains
       negamax_out = SearchResultT()
       call negamax(board, depth, 0, &
                    negamax_out%move, negamax_out%score, negamax_out%nnodes)
+
+      ! ensure position restoration after search
       call check_checkpoint(board, checkpoint)
 
-      ! compare search scores and ref_score
+      ! compare search scores and ref_score_opt
       if (alphabeta_out%score /= negamax_out%score) then
         write (unit=message_txt, fmt='(a,i0,a,i0)') &
           " alphabeta score:", alphabeta_out%score, &
           " negamax score:", negamax_out%score
         call fail_msg(trim(message_txt))
-      else if (present(ref_score)) then
-        if (negamax_out%score /= ref_score) then
+      else if (present(ref_score_opt)) then
+        if (negamax_out%score /= ref_score_opt) then
           write (unit=message_txt, fmt='(a,i0,a,i0)') &
             " negamax score:", negamax_out%score, &
-            " ref_score:", ref_score
+            " ref_score_opt:", ref_score_opt
           call fail_msg(trim(message_txt))
         end if
       end if
 
-      ! ensure null move for terminal position
+      ! ensure null move for terminal root position (without legal moves)
       if (nmoves == 0) then
         if (negamax_out%move /= 0_MVK) then
           call fail_msg("negamax: expected null move for terminal position")
         end if
+
+      ! check negamax move against saved legal move list
       else if (.not. any(checkpoint%moves == negamax_out%move)) then
         call fail_msg("negamax: returned move is not legal")
       end if
 
-      ! if searched move and not one of the ref_bm are matched, fail
-      if (present(ref_bm)) then
+      ! if searched move and not one of the ref_bm_opt are matched, fail
+      if (present(ref_bm_opt)) then
         ipos = 1
         found = .false.
         do
-          call next_token(ref_bm, ",", ipos, token)
+          ! accept comma separated list of ref_bm_opt, allowing ties
+          call next_token(ref_bm_opt, ",", ipos, token)
           if (token == "") exit
           if (get_uci(alphabeta_out%move) == token) then
             found = .true.
@@ -194,7 +203,7 @@ contains
         end do
         if (.not. found) then
           call fail_msg(" | bm:"//get_uci(alphabeta_out%move)//" /= "// &
-                        "ref_bm:"//trim(ref_bm))
+                        "ref_bm_opt:"//trim(ref_bm_opt))
         end if
       end if
     end do
