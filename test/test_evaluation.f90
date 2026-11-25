@@ -92,7 +92,6 @@ program test_evaluation
 
   call pass_msg()
 
-
   call begin_test("color-reflected knight evaluation")
 
   call base%clear_base()
@@ -129,8 +128,6 @@ program test_evaluation
   if (score /= 0_EVK) call fail_msg("bare kings evaluation not equal to 0")
 
   call pass_msg()
-
-  
 
   call assert_move_cache( &
     "capture evaluation caches", &
@@ -192,7 +189,6 @@ program test_evaluation
     "black capture-underpromotion evaluation caches", &
     "7k/8/8/8/8/8/p7/1R5K b - - 0 1", "a2b1n")
 
-
 contains
 
   subroutine assert_move_cache(test_name, fen, move_uci)
@@ -200,7 +196,7 @@ contains
     use BoardM, only: BoardT, get_board, set_fen, generate_legal_moves
     use MoveM, only: MVK, get_uci
     use TestUtilsM, only: PositionCheckpointT, &
-                         save_checkpoint, check_checkpoint
+                          save_checkpoint, check_checkpoint
 
     character(len=*), intent(in) :: test_name, fen, move_uci
 
